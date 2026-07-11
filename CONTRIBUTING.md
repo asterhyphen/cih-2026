@@ -17,18 +17,21 @@
   - `fix/*`
   - `docs/*`
 
+## Architecture
+
+- Use feature first architecture.
+- Use logic, presentation, providers model.
+- 
+
 ## Commit messages
 
 - Keep the first line short and descriptive.
-- Add an optional body when the change needs context.
-- Example:
-  - `Add contributing guide and Docker-based test environment`
 
 ## Where new features should live
 
 Keep business logic in feature-first folders under `lib/features/` and keep presentation widgets thin. For detailed architectural rules, see [AGENTS.md](AGENTS.md).
 
-## Adding a new patient schema field
+## Modifying patient schema fields
 
 Patient schema changes must be made in [lib/features/data/patient_schema.dart](lib/features/data/patient_schema.dart) only. That file is the single source of truth for the positional MedGate patient payload format.
 
