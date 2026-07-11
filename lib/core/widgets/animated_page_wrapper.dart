@@ -8,13 +8,6 @@ class AnimatedPageWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return child
-        .animate()
-        .fade(begin: 0.0, end: 1.0, duration: 280.ms)
-        .slide(
-          begin: const Offset(0, 0.03),
-          end: Offset.zero,
-          duration: 280.ms,
-        );
+    return child;
   }
 }

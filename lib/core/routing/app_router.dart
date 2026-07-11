@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -20,6 +21,24 @@ class AppRoutes {
   static const networkSimulator = '/network-simulator';
   static const specialist = '/specialist';
   static const settings = '/settings';
+}
+
+CustomTransitionPage<void> _fadeTransitionPage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 180),
+    reverseTransitionDuration: const Duration(milliseconds: 150),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeInOut,
+        ),
+        child: child,
+      );
+    },
+  );
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -50,35 +69,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) => const LoginPage(),
+        pageBuilder: (context, state) => _fadeTransitionPage(state, const LoginPage()),
       ),
       GoRoute(
         path: AppRoutes.register,
-        builder: (context, state) => const RegisterPage(),
+        pageBuilder: (context, state) => _fadeTransitionPage(state, const RegisterPage()),
       ),
       GoRoute(
         path: AppRoutes.onboarding,
-        builder: (context, state) => const OnboardingPage(),
+        pageBuilder: (context, state) => _fadeTransitionPage(state, const OnboardingPage()),
       ),
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) => const HomePage(),
+        pageBuilder: (context, state) => _fadeTransitionPage(state, const HomePage()),
       ),
       GoRoute(
         path: AppRoutes.nfcCapture,
-        builder: (context, state) => const NfcCapturePage(),
+        pageBuilder: (context, state) => _fadeTransitionPage(state, const NfcCapturePage()),
       ),
       GoRoute(
         path: AppRoutes.networkSimulator,
-        builder: (context, state) => const NetworkSimulatorPage(),
+        pageBuilder: (context, state) => _fadeTransitionPage(state, const NetworkSimulatorPage()),
       ),
       GoRoute(
         path: AppRoutes.specialist,
-        builder: (context, state) => const SpecialistPage(),
+        pageBuilder: (context, state) => _fadeTransitionPage(state, const SpecialistPage()),
       ),
       GoRoute(
         path: AppRoutes.settings,
-        builder: (context, state) => const SettingsPage(),
+        pageBuilder: (context, state) => _fadeTransitionPage(state, const SettingsPage()),
       ),
     ],
   );

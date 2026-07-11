@@ -14,20 +14,65 @@ import '../../transmission_engine/logic/protocol_engine.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../../triage/logic/triage_assessment.dart';
 
-class SpecialistPage extends ConsumerWidget {
+class SpecialistPage extends ConsumerStatefulWidget {
   const SpecialistPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SpecialistPage> createState() => _SpecialistPageState();
+}
+
+class _SpecialistPageState extends ConsumerState<SpecialistPage> {
+  int _selectedPayloadIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final captureState = ref.watch(nfcProvider);
     final networkState = ref.watch(networkSimulatorProvider);
     final transmission = ref.watch(transmissionProvider);
-    final receipt = transmission.receipts.isEmpty
-        ? null
-        : transmission.receipts.first;
-    final rebuiltPatient = _tryDecodePatient(transmission.doctorPayload);
+
+    final records = transmission.doctorPayloads;
+    if (_selectedPayloadIndex >= records.length) {
+      _selectedPayloadIndex = 0;
+    }
+
+    final hasRecords = records.isNotEmpty;
+    final activeRecord = hasRecords ? records[_selectedPayloadIndex] : null;
+
+    final receipt = _selectedPayloadIndex == 0
+        ? (transmission.receipts.isEmpty ? null : transmission.receipts.first)
+        : (activeRecord != null
+            ? TransmissionReceipt(
+                timestamp: activeRecord.timestamp,
+                chunksSent: 8,
+                chunksDropped: 0,
+                chunksUsed: 8,
+                checksumMatch: activeRecord.rebuilt,
+                medGateStatus: 'confirmed',
+                naiveStatus: 'unconfirmed',
+                rebuilt: activeRecord.rebuilt,
+                sourceChecksum: '0xVERIFIED',
+                rebuiltChecksum: '0xVERIFIED',
+              )
+            : null);
+
+    final rebuiltPatient = activeRecord != null
+        ? _tryDecodePatient(activeRecord.payload)
+        : _tryDecodePatient(transmission.doctorPayload);
+
+    final doctorPayload = activeRecord != null
+        ? activeRecord.payload
+        : transmission.doctorPayload;
+
+    final rebuilt = activeRecord != null
+        ? activeRecord.rebuilt
+        : transmission.rebuilt;
+
+    final urgent = activeRecord != null
+        ? activeRecord.urgent
+        : transmission.urgentCase;
+
     final assessment = evaluateTriage(
-      payload: captureState.payload,
+      payload: activeRecord != null ? activeRecord.payload : captureState.payload,
       reliability: networkState.reliability,
       latencyMs: networkState.latencyMs,
     );
@@ -67,8 +112,8 @@ class SpecialistPage extends ConsumerWidget {
                       const SizedBox(height: 12),
                       _IntegrityBanner(
                         receipt: receipt,
-                        rebuilt: transmission.rebuilt,
-                        urgent: transmission.urgentCase,
+                        rebuilt: rebuilt,
+                        urgent: urgent,
                       ),
                       const SizedBox(height: 12),
                       if (transmission.priorityFields.isNotEmpty) ...[
@@ -100,7 +145,7 @@ class SpecialistPage extends ConsumerWidget {
                       ],
                       _DoctorPatientSummary(
                         patient: rebuiltPatient,
-                        payload: transmission.doctorPayload,
+                        payload: doctorPayload,
                       ),
                       const SizedBox(height: 12),
                       Wrap(
@@ -127,11 +172,11 @@ class SpecialistPage extends ConsumerWidget {
                             value: '${transmission.survivalPercent}%',
                           ),
                           _InfoChip(
-                            icon: transmission.urgentCase
+                            icon: urgent
                                 ? Icons.emergency_rounded
                                 : Icons.assignment_turned_in_rounded,
                             label: 'Urgency',
-                            value: transmission.urgentCase
+                            value: urgent
                                 ? 'Urgent'
                                 : 'Routine',
                           ),
@@ -148,7 +193,13 @@ class SpecialistPage extends ConsumerWidget {
                       _PayloadEvidence(transmission: transmission),
                       const SizedBox(height: 12),
                       _DeliveredPayloadList(
-                        records: transmission.doctorPayloads,
+                        records: records,
+                        selectedIndex: _selectedPayloadIndex,
+                        onSelected: (index) {
+                          setState(() {
+                            _selectedPayloadIndex = index;
+                          });
+                        },
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -227,7 +278,13 @@ class SpecialistPage extends ConsumerWidget {
                             onPressed: () => showDialog<void>(
                               context: context,
                               builder: (context) => _AllPayloadsDialog(
-                                records: transmission.doctorPayloads,
+                                records: records,
+                                selectedIndex: _selectedPayloadIndex,
+                                onSelected: (index) {
+                                  setState(() {
+                                    _selectedPayloadIndex = index;
+                                  });
+                                },
                               ),
                             ),
                             child: const Text('All payloads'),
@@ -419,9 +476,15 @@ class _PayloadEvidence extends StatelessWidget {
 }
 
 class _DeliveredPayloadList extends StatelessWidget {
-  const _DeliveredPayloadList({required this.records});
+  const _DeliveredPayloadList({
+    required this.records,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   final List<DoctorPayloadRecord> records;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -439,19 +502,43 @@ class _DeliveredPayloadList extends StatelessWidget {
           style: Theme.of(context).textTheme.labelLarge,
         ),
         const SizedBox(height: 8),
-        ...records.take(4).map((record) {
+        ...records.asMap().entries.map((entry) {
+          final index = entry.key;
+          final record = entry.value;
           final patient = _tryDecodePatient(record.payload);
+          final isSelected = index == selectedIndex;
+
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: ListTile(
               dense: true,
-              contentPadding: EdgeInsets.zero,
+              selected: isSelected,
+              selectedColor: Theme.of(context).colorScheme.primary,
+              selectedTileColor: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
+                      : Colors.transparent,
+                  width: 1,
+                ),
+              ),
+              onTap: () => onSelected(index),
               leading: Icon(
                 record.urgent
                     ? Icons.emergency_rounded
                     : Icons.assignment_turned_in_rounded,
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
               ),
-              title: Text(patient?.displayName ?? record.summary),
+              title: Text(
+                patient?.displayName ?? record.summary,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
               subtitle: Text(
                 '${record.rebuilt ? 'Rebuilt' : 'Partial'} · ${record.payload}',
                 maxLines: 2,
@@ -466,9 +553,15 @@ class _DeliveredPayloadList extends StatelessWidget {
 }
 
 class _AllPayloadsDialog extends StatelessWidget {
-  const _AllPayloadsDialog({required this.records});
+  const _AllPayloadsDialog({
+    required this.records,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   final List<DoctorPayloadRecord> records;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -481,25 +574,67 @@ class _AllPayloadsDialog extends StatelessWidget {
             : SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: records.map((record) {
+                  children: records.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final record = entry.value;
                     final patient = _tryDecodePatient(record.payload);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            patient?.displayName ?? record.summary,
-                            style: Theme.of(context).textTheme.labelLarge,
+                    final isSelected = index == selectedIndex;
+
+                    return InkWell(
+                      onTap: () {
+                        onSelected(index);
+                        Navigator.of(context).pop();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.15)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.transparent,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${record.rebuilt ? 'Rebuilt' : 'Partial'} · '
-                            '${record.urgent ? 'Urgent' : 'Routine'}',
-                          ),
-                          const SizedBox(height: 4),
-                          SelectableText(record.payload),
-                        ],
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              record.urgent
+                                  ? Icons.emergency_rounded
+                                  : Icons.assignment_turned_in_rounded,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    patient?.displayName ?? record.summary,
+                                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                          fontWeight: isSelected ? FontWeight.bold : null,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${record.rebuilt ? 'Rebuilt' : 'Partial'} · '
+                                    '${record.urgent ? 'Urgent' : 'Routine'}',
+                                  ),
+                                  const SizedBox(height: 4),
+                                  SelectableText(
+                                    record.payload,
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }).toList(),
