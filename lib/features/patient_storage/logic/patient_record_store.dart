@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' as ffi;
 
 import '../../data/patient_model.dart';
 import '../../data/patient_schema.dart';
@@ -74,15 +75,15 @@ class StoredPatientRecord {
 }
 
 class PatientRecordStore {
-  PatientRecordStore({DatabaseFactory? factory, String? databasePath})
+  PatientRecordStore({sqflite.DatabaseFactory? factory, String? databasePath})
     : _factory = factory,
       _databasePath = databasePath;
 
-  final DatabaseFactory? _factory;
+  final sqflite.DatabaseFactory? _factory;
   final String? _databasePath;
-  Database? _database;
+  sqflite.Database? _database;
 
-  Future<Database> get _db async {
+  Future<sqflite.Database> get _db async {
     final existing = _database;
     if (existing != null) {
       return existing;
@@ -91,28 +92,28 @@ class PatientRecordStore {
     final dbPath = _databasePath ?? await _defaultPath(factory);
     _database = await factory.openDatabase(
       dbPath,
-      options: OpenDatabaseOptions(version: 1, onCreate: _create),
+      options: sqflite.OpenDatabaseOptions(version: 1, onCreate: _create),
     );
     return _database!;
   }
 
-  DatabaseFactory _defaultFactory() {
+  sqflite.DatabaseFactory _defaultFactory() {
     try {
-      return databaseFactory;
+      return sqflite.databaseFactory;
     } catch (_) {
-      sqfliteFfiInit();
-      return databaseFactoryFfi;
+      ffi.sqfliteFfiInit();
+      return ffi.databaseFactoryFfi;
     }
   }
 
-  Future<String> _defaultPath(DatabaseFactory factory) async {
-    if (identical(factory, databaseFactoryFfi)) {
+  Future<String> _defaultPath(sqflite.DatabaseFactory factory) async {
+    if (identical(factory, ffi.databaseFactoryFfi)) {
       return path.join(Directory.systemTemp.path, 'medgate_patients.db');
     }
-    return path.join(await getDatabasesPath(), 'medgate_patients.db');
+    return path.join(await sqflite.getDatabasesPath(), 'medgate_patients.db');
   }
 
-  Future<void> _create(Database db, int version) async {
+  Future<void> _create(sqflite.Database db, int version) async {
     await db.execute('''
       CREATE TABLE patient_records (
         record_id TEXT PRIMARY KEY,
@@ -178,7 +179,7 @@ class PatientRecordStore {
     await (await _db).insert(
       'patient_records',
       row,
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
     );
     return PatientRecordDiff(changedFields: diff);
   }
@@ -196,7 +197,7 @@ class PatientRecordStore {
     await (await _db).insert(
       'patient_records',
       row,
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
     );
   }
 

@@ -45,6 +45,7 @@ class HomePage extends ConsumerWidget {
       lossCount: 1,
       parityPieces: 2,
     );
+    final sending = transmissionState.status == 'transmitting';
 
     return Scaffold(
       body: AnimatedPageWrapper(
@@ -230,12 +231,14 @@ class HomePage extends ConsumerWidget {
                         children: [
                           FilledButton(
                             onPressed:
-                                patient == null || !patient.isValidForSend
+                                patient == null ||
+                                    !patient.isValidForSend ||
+                                    sending
                                 ? null
                                 : () => ref
                                       .read(transmissionProvider.notifier)
                                       .sendPatientRecord(patient: patient),
-                            child: const Text('Send'),
+                            child: Text(sending ? 'Sending...' : 'Send'),
                           ),
                           const SizedBox(width: 12),
                           OutlinedButton(

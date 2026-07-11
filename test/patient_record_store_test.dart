@@ -95,6 +95,24 @@ void main() {
     expect((await store.read('P1'))!.status, PatientSyncStatus.synced);
   });
 
+  test('send stages and confirms the current capture in one flow', () async {
+    final store = await _store('medgate-send-stages');
+    addTearDown(store.close);
+    final container = ProviderContainer(
+      overrides: [patientRecordStoreProvider.overrideWithValue(store)],
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(transmissionProvider.notifier)
+        .sendPatientRecord(patient: _patient(heartRate: 90));
+
+    final stored = await store.read('P1');
+    expect(container.read(transmissionProvider).status, 'delivered');
+    expect(stored?.status, PatientSyncStatus.synced);
+    expect(stored?.confirmedPatient?.heartRate, 90);
+  });
+
   test('database state survives store recreation', () async {
     sqfliteFfiInit();
     final file = File('${Directory.systemTemp.path}/medgate-restart.db');
