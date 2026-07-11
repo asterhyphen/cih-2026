@@ -20,38 +20,22 @@ class NfcCapturePage extends ConsumerStatefulWidget {
 class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
   bool _scanDialogVisible = false;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    ref.listen(nfcProvider, (previous, next) {
-      if (next.showGuide && next.status == 'scanning' && !_scanDialogVisible) {
-        _scanDialogVisible = true;
-        showNfcScanDialog(context).then((_) {
-          if (mounted) {
-            setState(() => _scanDialogVisible = false);
-          }
-        });
-      } else if (_scanDialogVisible && (!next.showGuide || next.status != 'scanning')) {
-        if (Navigator.canPop(context)) {
-          Navigator.of(context, rootNavigator: true).pop();
-        }
-        _scanDialogVisible = false;
+  void _presentScanDialog() {
+    if (!mounted || _scanDialogVisible) {
+      return;
+    }
+
+    _scanDialogVisible = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scanDialogVisible) {
+        return;
       }
 
-      if (previous?.message != next.message && next.status != 'scanning') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            content: Text(next.message),
-            action: next.requiresPermission
-                ? SnackBarAction(
-                    label: 'Manual entry',
-                    onPressed: () => ref.read(nfcProvider.notifier).loadFallback(),
-                  )
-                : null,
-          ),
-        );
-      }
+      showNfcScanDialog(context).then((_) {
+        if (mounted) {
+          setState(() => _scanDialogVisible = false);
+        }
+      });
     });
   }
 
@@ -62,7 +46,41 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
     final transmission = ref.watch(transmissionProvider);
     final patient = captureState.patient;
     final chunks = buildProtectedChunks(captureState.payload);
-    final canSend = patient != null && captureState.valid && patient.isValidForSend;
+    final canSend =
+        patient != null && captureState.valid && patient.isValidForSend;
+
+    ref.listen<NfcState>(
+      nfcProvider,
+      (previous, next) {
+        if (next.showGuide && next.status == 'scanning' && !_scanDialogVisible) {
+          _presentScanDialog();
+        } else if (_scanDialogVisible &&
+            (!next.showGuide || next.status != 'scanning')) {
+          if (Navigator.canPop(context)) {
+            Navigator.of(context, rootNavigator: true).pop();
+          }
+          if (mounted) {
+            setState(() => _scanDialogVisible = false);
+          }
+        }
+
+        if (previous?.message != next.message && next.status != 'scanning') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text(next.message),
+              action: next.requiresPermission
+                  ? SnackBarAction(
+                      label: 'Manual entry',
+                      onPressed: () =>
+                          ref.read(nfcProvider.notifier).loadFallback(),
+                    )
+                  : null,
+            ),
+          );
+        }
+      },
+    );
 
     return Scaffold(
       body: AnimatedPageWrapper(
@@ -102,7 +120,9 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                             decoration: BoxDecoration(
                               color: captureState.requiresPermission
                                   ? Theme.of(context).colorScheme.errorContainer
-                                  : Theme.of(context).colorScheme.primaryContainer,
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.primaryContainer,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
@@ -210,7 +230,9 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                           keyboardType: TextInputType.number,
                           onChanged: (value) => ref
                               .read(nfcProvider.notifier)
-                              .updateVitals(oxygenSaturation: int.tryParse(value)),
+                              .updateVitals(
+                                oxygenSaturation: int.tryParse(value),
+                              ),
                         ),
                         _VitalField(
                           label: 'Temperature',
@@ -326,7 +348,7 @@ class _InfoPill extends StatelessWidget {
   }
 }
 
-class _VitalField extends StatelessWidget {
+class _VitalField extends StatefulWidget {
   const _VitalField({
     required this.label,
     required this.value,
@@ -342,16 +364,48 @@ class _VitalField extends StatelessWidget {
   final int maxLines;
 
   @override
+  State<_VitalField> createState() => _VitalFieldState();
+}
+
+class _VitalFieldState extends State<_VitalField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _VitalField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value && widget.value != _controller.text) {
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextFormField(
-        key: ValueKey('$label-$value'),
-        initialValue: value,
-        keyboardType: keyboardType,
-        maxLines: maxLines,
-        decoration: InputDecoration(labelText: label),
-        onChanged: onChanged,
+        controller: _controller,
+        keyboardType: widget.keyboardType,
+        maxLines: widget.maxLines,
+        textInputAction: widget.maxLines > 1
+            ? TextInputAction.newline
+            : TextInputAction.next,
+        decoration: InputDecoration(labelText: widget.label),
+        onChanged: widget.onChanged,
       ),
     );
   }

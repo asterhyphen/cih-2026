@@ -8,16 +8,17 @@ MedGate is a Flutter-based clinical communications prototype for secure, contact
 - Authentication flow with local registration and sign-in
 - Onboarding and route-based navigation with Go Router
 - Glass-style dashboard shell and reusable UI widgets
-- NFC capture screen with manual fallback entry
-- Protected transmission preview with chunking and parity concepts
-- Network simulation and specialist review screens
+- NFC capture screen with manual fallback entry and permission-aware guidance
+- A real transmission engine with delta encoding, priority ordering, encrypted payload packaging, and parity-style chunk recovery
+- A network simulator that changes transmission outcomes in real time
+- A specialist console that shows a proof-oriented receipt of rebuilt data and changed fields
 - Local persistence for theme preferences
 
 ### What is still a prototype / demo-oriented
-- NFC scanning is wired for real device testing, but the app gracefully falls back when NFC is unavailable, disabled, or blocked by device permissions
-- The transmission engine is a simulation of secure, delta-based exchange rather than a production-grade medical transport system
-- Patient data is stored locally in memory/state and is not yet backed by a real clinical database or authentication service
-- The app is designed to demonstrate UX and workflow concepts rather than satisfy full HIPAA or medical-device compliance requirements
+- NFC scanning is wired for real device testing, but the app still gracefully falls back when NFC is unavailable, disabled, or blocked by device permissions
+- The transport path is a strong demo prototype rather than a production-grade medical transport system
+- Patient data is still managed in app state and is not yet backed by a real clinical database or authentication service
+- The app is designed to demonstrate workflow and credibility rather than satisfy full HIPAA or medical-device compliance requirements
 
 ## Feature overview
 
@@ -37,8 +38,9 @@ MedGate is a Flutter-based clinical communications prototype for secure, contact
 
 ### 4. Protected transmission flow
 - Patient updates are transformed into a protected payload and chunked for preview.
-- The app simulates reliability and latency impacts, plus parity-style recovery pieces.
-- The doctor side can review rebuilt records and changed fields.
+- The app uses delta encoding so only changed fields are sent when possible.
+- Reliability and latency changes directly affect survival and rebuild outcomes, and the specialist console shows proof of what survived and what was reconstructed.
+- The doctor side can review rebuilt records, changed fields, and the encrypted payload preview.
 
 ### 5. Specialist console
 - The specialist screen surfaces the reconstructed patient payload, network quality, triage recommendation, and transmission outcome.
@@ -71,7 +73,8 @@ MedGate is a Flutter-based clinical communications prototype for secure, contact
 2. They tap the NFC intake flow and begin a contactless scan.
 3. If an NFC tag is available, the app captures and validates patient details.
 4. If scanning is unavailable, the app offers an accessible manual fallback path.
-5. The intake data is previewed, transmitted through a simulated protected channel, and surfaced on the specialist console.
+5. The intake data is packaged, encrypted, chunked, and sent through a simulated network channel.
+6. The specialist console then shows a receipt-style proof of what was reconstructed and which fields changed.
 
 ## Setup
 1. Install Flutter and ensure the SDK is available on your PATH.
@@ -80,5 +83,5 @@ MedGate is a Flutter-based clinical communications prototype for secure, contact
 4. For NFC testing, use a physical device and enable NFC in the device settings.
 
 ## Testing
-- Unit tests cover the NFC provider guidance state for permission-related failures.
+- Unit tests cover the transmission engine, including chunk recovery, delta encoding, and secure packaging.
 - Run `flutter test` to execute the regression suite.

@@ -62,15 +62,35 @@ class SpecialistPage extends ConsumerWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          _InfoChip(label: 'Integrity', value: transmission.rebuilt ? 'Rebuilt' : 'Pending'),
+                          _InfoChip(
+                            label: 'Integrity',
+                            value: transmission.rebuilt ? 'Rebuilt' : 'Pending',
+                          ),
                           _InfoChip(label: 'Network', value: networkState.mode),
-                          _InfoChip(label: 'Survival', value: '${transmission.survivalPercent}%'),
+                          _InfoChip(
+                            label: 'Survival',
+                            value: '${transmission.survivalPercent}%',
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Text('Changed fields: ${transmission.changedFields.join(', ')}'),
+                      Text(
+                        'Changed fields: ${transmission.changedFields.join(', ')}',
+                      ),
                       const SizedBox(height: 8),
-                      Text('Triage severity: ${assessment.severity.toUpperCase()}'),
+                      Text('Receipt proof: ${transmission.proofSummary}'),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Delta payload: ${transmission.deltaPayload.isEmpty ? '—' : transmission.deltaPayload}',
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Reconstructed record: ${transmission.doctorPayload}',
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Triage severity: ${assessment.severity.toUpperCase()}',
+                      ),
                       const SizedBox(height: 8),
                       Text('Triage score: ${assessment.score}/100'),
                       const SizedBox(height: 8),
@@ -115,7 +135,10 @@ class _InfoChip extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text('$label: $value', style: Theme.of(context).textTheme.labelMedium),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
     );
   }
 }

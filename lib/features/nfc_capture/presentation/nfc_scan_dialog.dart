@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 Future<void> showNfcScanDialog(BuildContext context) {
   return showDialog(
     context: context,
+    useRootNavigator: true,
     barrierDismissible: false,
     builder: (context) {
       return Dialog(
@@ -23,7 +24,11 @@ Future<void> showNfcScanDialog(BuildContext context) {
                 ),
                 child: const Icon(Icons.nfc_rounded, size: 44)
                     .animate(onPlay: (controller) => controller.repeat())
-                    .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.04, 1.04), duration: 900.ms)
+                    .scale(
+                      begin: const Offset(0.95, 0.95),
+                      end: const Offset(1.04, 1.04),
+                      duration: 900.ms,
+                    )
                     .then()
                     .fadeIn(duration: 220.ms),
               ),

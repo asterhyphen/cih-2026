@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/widgets/animated_page_wrapper.dart';
 import '../../../core/widgets/floating_nav_bar.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../nfc_capture/providers/nfc_provider.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../providers/network_simulator_provider.dart';
 
@@ -13,7 +14,23 @@ class NetworkSimulatorPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(networkSimulatorProvider);
+    final captureState = ref.watch(nfcProvider);
     final transmission = ref.watch(transmissionProvider);
+    final patient = captureState.patient;
+
+    Future<void> runTransmission() async {
+      if (patient == null || !patient.isValidForSend) {
+        return;
+      }
+      await ref
+          .read(transmissionProvider.notifier)
+          .sendPatientRecord(
+            patient: patient,
+            reliability: state.reliability,
+            latencyMs: state.latencyMs,
+            sparePieces: 2,
+          );
+    }
 
     return Scaffold(
       body: AnimatedPageWrapper(
@@ -46,9 +63,12 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         max: 100,
                         divisions: 13,
                         label: '${state.reliability}%',
-                        onChanged: (value) => ref
-                            .read(networkSimulatorProvider.notifier)
-                            .setReliability(value),
+                        onChanged: (value) {
+                          ref
+                              .read(networkSimulatorProvider.notifier)
+                              .setReliability(value);
+                          runTransmission();
+                        },
                       ),
                       const SizedBox(height: 8),
                       Text('Latency: ${state.latencyMs}ms'),
@@ -58,9 +78,12 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         max: 650,
                         divisions: 59,
                         label: '${state.latencyMs}ms',
-                        onChanged: (value) => ref
-                            .read(networkSimulatorProvider.notifier)
-                            .setLatency(value),
+                        onChanged: (value) {
+                          ref
+                              .read(networkSimulatorProvider.notifier)
+                              .setLatency(value);
+                          runTransmission();
+                        },
                       ),
                       const SizedBox(height: 8),
                       Text('Delivery impact: ${state.deliveryImpact}'),
@@ -71,16 +94,26 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         spacing: 8,
                         children: [
                           FilledButton(
-                            onPressed: () => ref
-                                .read(networkSimulatorProvider.notifier)
-                                .setMode('stable'),
+                            onPressed: () {
+                              ref
+                                  .read(networkSimulatorProvider.notifier)
+                                  .setMode('stable');
+                              runTransmission();
+                            },
                             child: const Text('Stable'),
                           ),
                           OutlinedButton(
-                            onPressed: () => ref
-                                .read(networkSimulatorProvider.notifier)
-                                .setMode('degraded'),
+                            onPressed: () {
+                              ref
+                                  .read(networkSimulatorProvider.notifier)
+                                  .setMode('degraded');
+                              runTransmission();
+                            },
                             child: const Text('Degraded'),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: runTransmission,
+                            child: const Text('Run transmission'),
                           ),
                         ],
                       ),
@@ -97,6 +130,8 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
+                      Text('Proof: ${transmission.proofSummary}'),
+                      const SizedBox(height: 8),
                       Text(
                         'Our method: ${transmission.survivalPercent}% rebuilt',
                       ),
@@ -106,6 +141,10 @@ class NetworkSimulatorPage extends ConsumerWidget {
                       Text(
                         'Lost pieces: ${transmission.lostPieces} / '
                         '${transmission.chunkCount + transmission.parityCount}',
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Delta payload: ${transmission.deltaPayload.isEmpty ? '—' : transmission.deltaPayload}',
                       ),
                       const SizedBox(height: 12),
                       ...transmission.logs

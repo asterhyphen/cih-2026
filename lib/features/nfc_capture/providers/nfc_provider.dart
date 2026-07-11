@@ -147,16 +147,17 @@ class NfcController extends Notifier<NfcState> {
       notes: notes,
       photoRef: photoRef,
     );
+    final isComplete = updated.isValidForSend;
     state = state.copyWith(
-      status: state.valid ? state.status : 'manual',
+      status: isComplete ? 'manual' : 'manual',
       payload: updated.toPayload(),
       patient: updated,
-      valid: updated.isValidForSend,
+      valid: isComplete,
       buffered: true,
-      message: updated.isValidForSend
+      message: isComplete
           ? 'Patient update buffered for delta send'
           : 'Enter all required patient fields',
-      confidence: updated.isValidForSend ? 100 : 0,
+      confidence: isComplete ? 100 : 0,
       showGuide: false,
     );
   }

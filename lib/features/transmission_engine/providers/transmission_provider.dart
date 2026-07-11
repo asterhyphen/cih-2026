@@ -32,6 +32,9 @@ class TransmissionState {
     this.changedFields = const <String>[],
     this.chunkCount = 0,
     this.parityCount = 0,
+    this.deltaPayload = '',
+    this.encryptedPreview = '',
+    this.proofSummary = 'Waiting for a transmission run',
   });
 
   final String status;
@@ -47,6 +50,9 @@ class TransmissionState {
   final List<String> changedFields;
   final int chunkCount;
   final int parityCount;
+  final String deltaPayload;
+  final String encryptedPreview;
+  final String proofSummary;
 }
 
 class TransmissionController extends Notifier<TransmissionState> {
@@ -107,6 +113,9 @@ class TransmissionController extends Notifier<TransmissionState> {
         survivalPercent: state.survivalPercent,
         doctorPayload: state.doctorPayload,
         normalAppStatus: state.normalAppStatus,
+        deltaPayload: state.deltaPayload,
+        encryptedPreview: state.encryptedPreview,
+        proofSummary: 'No new changes detected; duplicate buffered',
       );
       return;
     }
@@ -137,6 +146,11 @@ class TransmissionController extends Notifier<TransmissionState> {
         changedFields: result.delta.changedFields,
         chunkCount: result.chunkCount,
         parityCount: result.parityCount,
+        deltaPayload: result.delta.payload,
+        encryptedPreview: result.payload,
+        proofSummary: result.rebuilt
+            ? 'Rebuilt from ${result.chunkCount} data chunks and ${result.parityCount} parity pieces'
+            : 'Partial delivery; ${result.lostPieces} pieces lost',
       );
     }
 
@@ -174,6 +188,11 @@ class TransmissionController extends Notifier<TransmissionState> {
       changedFields: result.delta.changedFields,
       chunkCount: result.chunkCount,
       parityCount: result.parityCount,
+      deltaPayload: result.delta.payload,
+      encryptedPreview: result.payload,
+      proofSummary: result.rebuilt
+          ? 'Rebuilt from ${result.chunkCount} data chunks and ${result.parityCount} parity pieces'
+          : 'Partial delivery; ${result.lostPieces} pieces lost',
     );
   }
 }

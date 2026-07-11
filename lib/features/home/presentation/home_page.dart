@@ -41,7 +41,10 @@ class HomePage extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Care dashboard', style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  'Care dashboard',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   'Track intake progress, transmission health, and specialist readiness in one place.',
@@ -61,9 +64,14 @@ class HomePage extends ConsumerWidget {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primaryContainer,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
@@ -80,43 +88,77 @@ class HomePage extends ConsumerWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          _SummaryChip(label: 'Chunks', value: '${chunks.length}'),
-                          _SummaryChip(label: 'Triage', value: assessment.severity.toUpperCase()),
-                          _SummaryChip(label: 'Signal', value: networkState.qualityLabel),
+                          _SummaryChip(
+                            label: 'Chunks',
+                            value: '${chunks.length}',
+                          ),
+                          _SummaryChip(
+                            label: 'Triage',
+                            value: assessment.severity.toUpperCase(),
+                          ),
+                          _SummaryChip(
+                            label: 'Signal',
+                            value: networkState.qualityLabel,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Text('Transmission: ${transmissionState.status}', style: Theme.of(context).textTheme.labelLarge),
+                      Text(
+                        'Transmission: ${transmissionState.status}',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
                       const SizedBox(height: 8),
-                      Text('Triage score: ${assessment.score}/100 • ${assessment.recommendation}'),
+                      Text('Proof: ${transmissionState.proofSummary}'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Triage score: ${assessment.score}/100 • ${assessment.recommendation}',
+                      ),
                       const SizedBox(height: 8),
-                      Text('Adaptive rebuild: ${adaptiveResult.summary} (${adaptiveResult.survivalPercent}%)'),
+                      Text(
+                        'Adaptive rebuild: ${adaptiveResult.summary} (${adaptiveResult.survivalPercent}%)',
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Delta payload: ${transmissionState.deltaPayload.isEmpty ? '—' : transmissionState.deltaPayload}',
+                      ),
                       const SizedBox(height: 8),
-                      LinearProgressIndicator(value: transmissionState.progress / 100),
+                      LinearProgressIndicator(
+                        value: transmissionState.progress / 100,
+                      ),
                       const SizedBox(height: 8),
                       Text(transmissionState.message),
                       const SizedBox(height: 12),
                       if (transmissionState.history.isNotEmpty) ...[
-                        Text('Recent activity', style: Theme.of(context).textTheme.labelLarge),
-                        const SizedBox(height: 8),
-                        ...transmissionState.history.take(3).map(
-                          (entry) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Text('• ${entry.status} · ${entry.payload} · ${entry.networkMode}'),
-                          ),
+                        Text(
+                          'Recent activity',
+                          style: Theme.of(context).textTheme.labelLarge,
                         ),
+                        const SizedBox(height: 8),
+                        ...transmissionState.history
+                            .take(3)
+                            .map(
+                              (entry) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  '• ${entry.status} · ${entry.payload} · ${entry.networkMode}',
+                                ),
+                              ),
+                            ),
                         const SizedBox(height: 12),
                       ],
                       Row(
                         children: [
                           FilledButton(
-                            onPressed: patient == null || !patient.isValidForSend
+                            onPressed:
+                                patient == null || !patient.isValidForSend
                                 ? null
-                                : () => ref.read(transmissionProvider.notifier).sendPatientRecord(
-                                      patient: patient,
-                                      reliability: networkState.reliability,
-                                      latencyMs: networkState.latencyMs,
-                                    ),
+                                : () => ref
+                                      .read(transmissionProvider.notifier)
+                                      .sendPatientRecord(
+                                        patient: patient,
+                                        reliability: networkState.reliability,
+                                        latencyMs: networkState.latencyMs,
+                                      ),
                             child: const Text('Send'),
                           ),
                           const SizedBox(width: 12),
@@ -153,7 +195,10 @@ class _SummaryChip extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text('$label: $value', style: Theme.of(context).textTheme.labelMedium),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
     );
   }
 }

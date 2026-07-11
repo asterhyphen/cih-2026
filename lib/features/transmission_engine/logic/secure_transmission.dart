@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:encrypt/encrypt.dart';
 
 import '../../data/patient_model.dart';
@@ -15,6 +17,7 @@ class SecureTransmissionResult {
     required this.parityCount,
     required this.firstPayloadLabel,
     required this.encryptedByteCount,
+    required this.payload,
   });
 
   final DeltaResult delta;
@@ -25,6 +28,7 @@ class SecureTransmissionResult {
   final int parityCount;
   final String firstPayloadLabel;
   final int encryptedByteCount;
+  final String payload;
 }
 
 SecureTransmissionResult simulateSecureTransmission({
@@ -73,7 +77,8 @@ SecureTransmissionResult simulateSecureTransmission({
     chunkCount: dataChunks,
     parityCount: sparePieces,
     firstPayloadLabel: queue.first.label,
-    encryptedByteCount: payload.length,
+    encryptedByteCount: utf8.encode(payload).length,
+    payload: payload,
   );
 }
 
