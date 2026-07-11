@@ -31,7 +31,7 @@ void main() {
   });
 
   group('recovery strategy', () {
-    test('reports a higher confidence score for RS-style recovery', () {
+    test('does not smooth confidence upward beyond recovery bounds', () {
       const xor = XorParityRecoveryStrategy();
       const rs = ReedSolomonRecoveryStrategy();
 
@@ -50,8 +50,17 @@ void main() {
         checksumMatched: false,
       );
 
-      expect(xorResult.confidencePercent, lessThan(rsResult.confidencePercent));
+      expect(xorResult.confidencePercent, 100);
       expect(rsResult.state, RecoveryState.recovered);
+      final failed = rs.evaluate(
+        expectedChunks: 8,
+        receivedChunks: 3,
+        recoveryChunks: 2,
+        recoveredFields: ['bloodPressure'],
+        checksumMatched: false,
+      );
+      expect(failed.confidencePercent, 38);
+      expect(failed.state, RecoveryState.degraded);
     });
   });
 }

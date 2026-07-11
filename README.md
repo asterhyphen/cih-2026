@@ -22,9 +22,11 @@ MedGate is not a finished medical product. It is a proof-of-concept experience f
 
 ### Transmission and recovery demo
 - Real DEFLATE/gzip compression applied before encryption so payloads shrink before they leave the device
+- The transport pipeline is raw payload -> positional field/tuple encoding -> max-level gzip/DEFLATE -> encryption -> redundancy chunks -> network chunking, with raw, encoded, compressed, and final on-wire byte counts shown in the integrity log
 - Delta-based payload preparation so only changed fields are emphasized when possible; the implementation uses field-level hashing against the last successfully transmitted local database record, not just the last locally edited value
 - Encrypted payload packaging and chunked transmission simulation
-- Simplified XOR-based parity recovery that is conceptually similar to RAID 5 parity; it can reconstruct a single lost chunk per group from the remaining members of that group
+- Simplified XOR-based parity recovery that is conceptually similar to RAID 5 parity; it can reconstruct a single lost chunk per group from the remaining members of that group, and it fails honestly when loss exceeds that group capacity
+- MedGate's Recovery Confidence score reflects genuine mathematical recovery limits, the same way QR codes fail to scan when damage exceeds their designed error-correction threshold. This transparency is intentional, so severe packet loss can produce partial recovery or failure.
 - Adaptive clinical priority ordering so critical vital data is transmitted first
 - Progressive specialist review that unlocks sections as data becomes available
 - Store-and-forward queueing with retry handling for later delivery attempts
@@ -39,6 +41,7 @@ MedGate is not a finished medical product. It is a proof-of-concept experience f
 - Local validation warns on clinically implausible values without using any cloud service
 - Transmission state now tracks missing chunks, retransmission activity, and recovery progress
 - The network simulator exposes active strategy, chunk size, compression level, redundancy, and parity settings
+- The redundancy control is a live tradeoff: higher parity survives more random loss but increases final on-wire bytes; lower parity keeps transmissions smaller but fails sooner as loss increases
 
 ### Platform and UX polish
 - Android-focused UX patterns and NFC guidance

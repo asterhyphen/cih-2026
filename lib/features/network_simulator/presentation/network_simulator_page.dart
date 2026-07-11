@@ -79,6 +79,21 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         },
                       ),
                       const SizedBox(height: 8),
+                      Text('Redundancy: ${state.redundancy} parity pieces'),
+                      Slider(
+                        value: state.redundancy.toDouble(),
+                        min: 0,
+                        max: 6,
+                        divisions: 6,
+                        label: '${state.redundancy}',
+                        onChanged: (value) {
+                          ref
+                              .read(networkSimulatorProvider.notifier)
+                              .setRedundancy(value);
+                          runTransmission();
+                        },
+                      ),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -86,7 +101,10 @@ class NetworkSimulatorPage extends ConsumerWidget {
                           _InfoPill(label: 'Mode', value: state.mode),
                           _InfoPill(label: 'Risk', value: state.deliveryImpact),
                           _InfoPill(label: 'Signal', value: state.qualityLabel),
-                          _InfoPill(label: 'Strategy', value: state.activeStrategy),
+                          _InfoPill(
+                            label: 'Strategy',
+                            value: state.activeStrategy,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -160,14 +178,22 @@ class NetworkSimulatorPage extends ConsumerWidget {
                           naiveOk: transmission.normalAppStatus == 'Delivered',
                         ),
                       const SizedBox(height: 12),
-                      Text('Bandwidth Budget: ${transmission.bandwidthBudget} kbps'),
+                      Text(
+                        'Bandwidth Budget: ${transmission.bandwidthBudget} kbps',
+                      ),
                       Text('Current Usage: ${transmission.currentUsage} kbps'),
-                      Text('Remaining Budget: ${transmission.remainingBudget} kbps'),
-                      Text('Compression Ratio: ${transmission.compressionRatio.toStringAsFixed(2)}x'),
+                      Text(
+                        'Remaining Budget: ${transmission.remainingBudget} kbps',
+                      ),
+                      Text(
+                        'Compression Ratio: ${transmission.compressionRatio.toStringAsFixed(2)}x',
+                      ),
                       Text('Packet Loss: ${transmission.packetLoss}%'),
                       Text('Latency: ${transmission.latency} ms'),
                       Text('Recovery %: ${transmission.recoveryPercent}%'),
-                      Text('Estimated Delivery Time: ${transmission.estimatedDeliveryTime} ms'),
+                      Text(
+                        'Estimated Delivery Time: ${transmission.estimatedDeliveryTime} ms',
+                      ),
                       const SizedBox(height: 12),
                       Text(transmission.proofSummary),
                       const SizedBox(height: 12),

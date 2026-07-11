@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:archive/archive.dart';
 import 'package:encrypt/encrypt.dart';
@@ -28,8 +29,13 @@ class SecureTransmissionResult {
     required this.encryptedByteCount,
     required this.payload,
     required this.compressedByteCount,
+    required this.encodedByteCount,
     required this.originalByteCount,
+    required this.finalByteCount,
     required this.compressionRatio,
+    required this.stageLog,
+    required this.missingChunkIds,
+    required this.recoveryConfidencePercent,
     required this.fallbackTriggered,
     required this.fallbackTriggerAttempt,
     required this.fallbackImageTier,
@@ -52,8 +58,13 @@ class SecureTransmissionResult {
   final int encryptedByteCount;
   final String payload;
   final int compressedByteCount;
+  final int encodedByteCount;
   final int originalByteCount;
+  final int finalByteCount;
   final double compressionRatio;
+  final List<String> stageLog;
+  final List<String> missingChunkIds;
+  final int recoveryConfidencePercent;
   final bool fallbackTriggered;
   final int fallbackTriggerAttempt;
   final String fallbackImageTier;
@@ -67,6 +78,7 @@ SecureTransmissionResult simulateSecureTransmission({
   int chunkSize = 18,
   bool urgent = false,
   int retryAttempt = 0,
+  int? randomSeed,
 }) {
   final delta = encodeDelta(patient.toWireMap(), previousRecord);
   final plan = buildClinicalTransmissionPlan(patient);
@@ -74,7 +86,7 @@ SecureTransmissionResult simulateSecureTransmission({
       .map(
         (field) => QueuedPayload(
           label: field.label,
-          payload: _encrypted('${field.priority.name}:${field.value}'),
+          payload: '${field.priority.name}:${field.value}',
           priority: switch (field.priority) {
             ClinicalPriority.critical => TransmissionPriority.urgent,
             ClinicalPriority.high => TransmissionPriority.urgent,
@@ -88,30 +100,36 @@ SecureTransmissionResult simulateSecureTransmission({
     if (urgent || patient.urgent)
       QueuedPayload(
         label: 'manual urgent flag',
-        payload: _encrypted(buildEmergencySnapshot(patient)),
+        payload: buildEmergencySnapshot(patient),
         priority: TransmissionPriority.emergency,
       ),
     QueuedPayload(
       label: 'urgent vitals',
-      payload: _encrypted(delta.payload),
+      payload: delta.payload,
       priority: TransmissionPriority.urgent,
     ),
     ...clinicalPayloads,
     if (patient.notes.trim().isNotEmpty)
       QueuedPayload(
         label: 'clinical note',
-        payload: _encrypted(patient.notes),
+        payload: patient.notes,
         priority: TransmissionPriority.routine,
       ),
     if (patient.photoRef.trim().isNotEmpty)
       QueuedPayload(
         label: 'photo reference',
-        payload: _encrypted(patient.photoRef),
+        payload: patient.photoRef,
         priority: TransmissionPriority.media,
       ),
   ]);
+  final rawPayload = queue
+      .map((item) => '${item.label}:${item.payload}:${item.priority.name}')
+      .join(';');
   final basePayload = queue
-      .map((item) => '${item.label}:${item.payload}')
+      .map(
+        (item) =>
+            [_compact(item.label), item.payload, item.priority.index].join(','),
+      )
       .join(';');
   // Compress before encrypt so the payload is reduced with DEFLATE/gzip and the
   // ciphertext does not remain as raw, incompressible noise.
@@ -123,12 +141,25 @@ SecureTransmissionResult simulateSecureTransmission({
     sparePieces: sparePieces,
   );
   final lossRate = ((100 - reliability) / 100).clamp(0.0, 0.9);
-  final lostPieces = (chunks.length * lossRate).ceil();
+  final random = randomSeed == null ? Random() : Random(randomSeed);
+  final survivingChunks = <ProtectedChunk>[];
+  final droppedChunks = <ProtectedChunk>[];
+  for (final chunk in chunks) {
+    if (random.nextDouble() < lossRate) {
+      droppedChunks.add(chunk);
+    } else {
+      survivingChunks.add(chunk);
+    }
+  }
+  final recovery = tryReconstructPayload(
+    survivingChunks,
+    expectedDataChunkCount: chunks.where((chunk) => !chunk.parity).length,
+    recoveryGroupCount: sparePieces,
+  );
+  final lostPieces = droppedChunks.length;
   final dataChunks = chunks.where((chunk) => !chunk.parity).length;
-  final rebuilt = lostPieces <= sparePieces;
-  final chunksUsed = (chunks.length - lostPieces)
-      .clamp(0, chunks.length)
-      .toInt();
+  final rebuilt = recovery.rebuilt;
+  final chunksUsed = recovery.recoveredDataChunks;
   final sourceChecksum = _checksum(delta.payload);
   final fallbackTriggered = urgent || (retryAttempt >= 3 && reliability < 60);
   final fallbackTriggerAttempt = urgent ? 0 : (retryAttempt + 1).clamp(0, 4);
@@ -137,12 +168,16 @@ SecureTransmissionResult simulateSecureTransmission({
       : '';
   final rebuiltChecksum = rebuilt
       ? sourceChecksum
-      : _checksum('partial:$basePayload');
-  final survival = rebuilt
-      ? 100
-      : (((chunks.length - lostPieces) / dataChunks) * 100)
-            .clamp(0, 100)
-            .round();
+      : _checksum('partial:${recovery.payload}');
+  final survival = rebuilt ? 100 : recovery.confidencePercent;
+  final originalBytes = utf8.encode(rawPayload).length;
+  final encodedBytes = utf8.encode(basePayload).length;
+  final compressedBytes = base64.decode(compressedPayload).length;
+  final encryptedBytes = utf8.encode(encryptedPayload).length;
+  final finalBytes = chunks.fold<int>(
+    0,
+    (sum, chunk) => sum + utf8.encode(chunk.body).length,
+  );
 
   return SecureTransmissionResult(
     delta: delta,
@@ -163,11 +198,23 @@ SecureTransmissionResult simulateSecureTransmission({
         : 'Stalled on full resend',
     naiveSucceeded: lostPieces == 0,
     firstPayloadLabel: queue.first.label,
-    encryptedByteCount: utf8.encode(encryptedPayload).length,
+    encryptedByteCount: encryptedBytes,
     payload: encryptedPayload,
-    compressedByteCount: utf8.encode(compressedPayload).length,
-    originalByteCount: utf8.encode(basePayload).length,
-    compressionRatio: _compressionRatio(basePayload, compressedPayload),
+    compressedByteCount: compressedBytes,
+    encodedByteCount: encodedBytes,
+    originalByteCount: originalBytes,
+    finalByteCount: finalBytes,
+    compressionRatio: _compressionRatio(rawPayload, compressedBytes),
+    stageLog: _stageLog(
+      originalBytes: originalBytes,
+      encodedBytes: encodedBytes,
+      compressedBytes: compressedBytes,
+      finalBytes: finalBytes,
+    ),
+    missingChunkIds: droppedChunks
+        .map((chunk) => '${chunk.parity ? 'parity' : 'data'}-${chunk.index}')
+        .toList(),
+    recoveryConfidencePercent: recovery.confidencePercent,
     fallbackTriggered: fallbackTriggered,
     fallbackTriggerAttempt: fallbackTriggerAttempt,
     fallbackImageTier: fallbackImageTier,
@@ -177,7 +224,7 @@ SecureTransmissionResult simulateSecureTransmission({
 String _compressPayload(String value) {
   final input = utf8.encode(value);
   final gzip = GZipEncoder();
-  final output = gzip.encode(input);
+  final output = gzip.encode(input, level: 9);
   return base64.encode(output);
 }
 
@@ -196,13 +243,48 @@ String _checksum(String value) {
   return hash.toUnsigned(32).toRadixString(16).padLeft(8, '0');
 }
 
-double _compressionRatio(String original, String compressed) {
+double _compressionRatio(String original, int compressedBytes) {
   final originalBytes = utf8.encode(original).length;
-  final compressedBytes = utf8.encode(compressed).length;
   if (originalBytes <= 0) {
     return 1.0;
   }
   return (originalBytes / compressedBytes).clamp(0.0, 10.0);
+}
+
+String _compact(String value) {
+  return value
+      .split(RegExp(r'[^A-Za-z0-9]+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => part.substring(0, part.length < 3 ? part.length : 3))
+      .join();
+}
+
+List<String> _stageLog({
+  required int originalBytes,
+  required int encodedBytes,
+  required int compressedBytes,
+  required int finalBytes,
+}) {
+  return [
+    'Raw payload: $originalBytes B',
+    'Positional payload: $encodedBytes B (${_saved(originalBytes, encodedBytes)} saved)',
+    'GZip level 9: $compressedBytes B (${_saved(encodedBytes, compressedBytes)} saved)',
+    'Encrypted + redundancy: $finalBytes B (${_growth(compressedBytes, finalBytes)} overhead)',
+  ];
+}
+
+String _saved(int before, int after) {
+  if (before <= 0) {
+    return '0.0%';
+  }
+  return '${(((before - after) / before) * 100).toStringAsFixed(1)}%';
+}
+
+String _growth(int before, int after) {
+  if (before <= 0) {
+    return '0.0%';
+  }
+  return '${(((after - before) / before) * 100).toStringAsFixed(1)}%';
 }
 
 String _encrypted(String value) {

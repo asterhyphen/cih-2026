@@ -38,12 +38,20 @@ class NetworkSimulatorController extends Notifier<NetworkState> {
 
   void setReliability(double value) {
     final reliability = value.round();
-    state = _fromValues(state.latencyMs, reliability, bandwidthKbps: state.bandwidthKbps);
+    state = _fromValues(
+      state.latencyMs,
+      reliability,
+      bandwidthKbps: state.bandwidthKbps,
+    );
   }
 
   void setLatency(double value) {
     final latency = value.round();
-    state = _fromValues(latency, state.reliability, bandwidthKbps: state.bandwidthKbps);
+    state = _fromValues(
+      latency,
+      state.reliability,
+      bandwidthKbps: state.bandwidthKbps,
+    );
   }
 
   void setBandwidth(double value) {
@@ -52,6 +60,24 @@ class NetworkSimulatorController extends Notifier<NetworkState> {
       state.latencyMs,
       state.reliability,
       bandwidthKbps: bandwidth,
+    );
+  }
+
+  void setRedundancy(double value) {
+    state = NetworkState(
+      mode: state.mode,
+      latencyMs: state.latencyMs,
+      reliability: state.reliability,
+      deliveryImpact: state.deliveryImpact,
+      qualityLabel: state.qualityLabel,
+      compareMode: state.compareMode,
+      activeStrategy: state.activeStrategy,
+      bandwidthKbps: state.bandwidthKbps,
+      chunkSize: state.chunkSize,
+      compressionLevel: state.compressionLevel,
+      redundancy: value.round().clamp(0, 6),
+      parityPackets: value.round().clamp(0, 6),
+      profileLabel: state.profileLabel,
     );
   }
 
@@ -175,7 +201,11 @@ class NetworkSimulatorController extends Notifier<NetworkState> {
     }
   }
 
-  NetworkState _fromValues(int latencyMs, int reliability, {required int bandwidthKbps}) {
+  NetworkState _fromValues(
+    int latencyMs,
+    int reliability, {
+    required int bandwidthKbps,
+  }) {
     final mode = reliability < 78 || latencyMs > 250 ? 'degraded' : 'stable';
     final risk = reliability < 65 || latencyMs > 420
         ? 'Critical risk'

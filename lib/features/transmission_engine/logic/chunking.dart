@@ -44,12 +44,41 @@ class ProtectedChunk {
   final int parityGroup;
 }
 
+class PayloadRecoveryResult {
+  const PayloadRecoveryResult({
+    required this.rebuilt,
+    required this.payload,
+    required this.recoveredDataChunks,
+    required this.failedGroups,
+    required this.totalGroups,
+  });
+
+  final bool rebuilt;
+  final String payload;
+  final int recoveredDataChunks;
+  final int failedGroups;
+  final int totalGroups;
+
+  int get confidencePercent {
+    if (totalGroups <= 0) {
+      return rebuilt ? 100 : 0;
+    }
+    return (((totalGroups - failedGroups) / totalGroups) * 100)
+        .clamp(0, 100)
+        .round();
+  }
+}
+
 List<ProtectedChunk> buildProtectedChunks(
   String input, {
   int chunkSize = 18,
   int sparePieces = 2,
 }) {
-  return buildProtectedChunksOptimized(input, chunkSize: chunkSize, sparePieces: sparePieces);
+  return buildProtectedChunksOptimized(
+    input,
+    chunkSize: chunkSize,
+    sparePieces: sparePieces,
+  );
 }
 
 /// A simplified erasure-coding scheme using XOR-based parity, conceptually similar
@@ -105,34 +134,63 @@ List<ProtectedChunk> buildProtectedChunksOptimized(
 String reconstructPayload(
   Iterable<ProtectedChunk> availableChunks, {
   required int expectedDataChunkCount,
+  int? recoveryGroupCount,
+}) {
+  final result = tryReconstructPayload(
+    availableChunks,
+    expectedDataChunkCount: expectedDataChunkCount,
+    recoveryGroupCount: recoveryGroupCount,
+  );
+  if (!result.rebuilt) {
+    throw StateError('Not enough chunks to reconstruct payload');
+  }
+  return result.payload;
+}
+
+/// Reconstructs only groups that are within the XOR parity correction limit.
+///
+/// Each parity group can recover one missing data chunk if its parity chunk
+/// survived. Groups beyond that limit are reported as failed instead of being
+/// silently treated as recovered.
+PayloadRecoveryResult tryReconstructPayload(
+  Iterable<ProtectedChunk> availableChunks, {
+  required int expectedDataChunkCount,
+  int? recoveryGroupCount,
 }) {
   final availableDataChunks =
       availableChunks.where((chunk) => !chunk.parity).toList()
         ..sort((a, b) => a.index.compareTo(b.index));
   final parityChunks = availableChunks.where((chunk) => chunk.parity).toList();
   final recoveredByIndex = <int, ProtectedChunk>{};
+  final failedGroups = <int>{};
 
   for (final chunk in availableDataChunks) {
     recoveredByIndex[chunk.index] = chunk;
   }
 
-  final parityCount = parityChunks.length;
+  final totalGroups =
+      recoveryGroupCount ??
+      _expectedParityGroups(expectedDataChunkCount, availableChunks);
   for (final parityChunk in parityChunks) {
-    if (parityCount == 0) {
+    if (totalGroups <= 0) {
       continue;
     }
 
     final groupIndices = <int>[
       for (var index = 0; index < expectedDataChunkCount; index++)
-        if (index % parityCount == parityChunk.parityGroup) index,
+        if (index % totalGroups == parityChunk.parityGroup) index,
     ];
-    final missingIndex = groupIndices.firstWhere(
-      (index) => !recoveredByIndex.containsKey(index),
-      orElse: () => -1,
-    );
-    if (missingIndex < 0) {
+    final missingIndices = groupIndices
+        .where((index) => !recoveredByIndex.containsKey(index))
+        .toList();
+    if (missingIndices.isEmpty) {
       continue;
     }
+    if (missingIndices.length > 1) {
+      failedGroups.add(parityChunk.parityGroup);
+      continue;
+    }
+    final missingIndex = missingIndices.single;
 
     final survivingChunks = groupIndices
         .where(
@@ -156,19 +214,54 @@ String reconstructPayload(
     );
   }
 
-  if (recoveredByIndex.length < expectedDataChunkCount) {
-    throw StateError('Not enough chunks to reconstruct payload');
+  for (var groupIndex = 0; groupIndex < totalGroups; groupIndex++) {
+    final groupIndices = <int>[
+      for (var index = 0; index < expectedDataChunkCount; index++)
+        if (index % totalGroups == groupIndex) index,
+    ];
+    final missingCount = groupIndices
+        .where((index) => !recoveredByIndex.containsKey(index))
+        .length;
+    final parityAvailable = parityChunks.any(
+      (chunk) => chunk.parityGroup == groupIndex,
+    );
+    if (missingCount > 0 && (!parityAvailable || missingCount > 1)) {
+      failedGroups.add(groupIndex);
+    }
   }
 
   final reconstructed = StringBuffer();
   for (var index = 0; index < expectedDataChunkCount; index++) {
     final chunk = recoveredByIndex[index];
     if (chunk == null) {
-      throw StateError('Not enough chunks to reconstruct payload');
+      continue;
     }
     reconstructed.write(chunk.body);
   }
-  return reconstructed.toString();
+  return PayloadRecoveryResult(
+    rebuilt: recoveredByIndex.length >= expectedDataChunkCount,
+    payload: reconstructed.toString(),
+    recoveredDataChunks: recoveredByIndex.length,
+    failedGroups: failedGroups.length,
+    totalGroups: totalGroups,
+  );
+}
+
+int _expectedParityGroups(
+  int expectedDataChunkCount,
+  Iterable<ProtectedChunk> availableChunks,
+) {
+  final highestGroup = availableChunks
+      .where((chunk) => chunk.parity || chunk.parityGroup >= 0)
+      .fold<int>(
+        -1,
+        (highest, chunk) =>
+            highest > chunk.parityGroup ? highest : chunk.parityGroup,
+      );
+  if (highestGroup >= 0) {
+    return highestGroup + 1;
+  }
+  return expectedDataChunkCount > 0 ? 1 : 0;
 }
 
 String _buildParityChunk(List<ProtectedChunk> dataChunks) {

@@ -96,11 +96,13 @@ class _QueuedPatientTransmission {
     required this.id,
     required this.patient,
     required this.sparePieces,
+    this.randomSeed,
   });
 
   final String id;
   final PatientModel patient;
   final int sparePieces;
+  final int? randomSeed;
 }
 
 class TransmissionTimelineEvent {
@@ -387,6 +389,7 @@ class TransmissionController extends Notifier<TransmissionState> {
   Future<void> sendPatientRecord({
     required PatientModel patient,
     int sparePieces = 3,
+    int? randomSeed,
   }) async {
     if (!patient.isValidForSend) {
       state = state.copyWith(
@@ -402,6 +405,7 @@ class TransmissionController extends Notifier<TransmissionState> {
       id: 'queue-${_queueCounter++}',
       patient: patient,
       sparePieces: sparePieces,
+      randomSeed: randomSeed,
     );
     _pendingPatients.add(item);
     state = state.copyWith(
@@ -488,6 +492,7 @@ class TransmissionController extends Notifier<TransmissionState> {
       sparePieces: urgentSparePieces + initialNetwork.redundancy,
       chunkSize: initialNetwork.chunkSize,
       urgent: patient.urgent,
+      randomSeed: queued.randomSeed,
     );
     if (!initialResult.delta.hasDelta) {
       state = state.copyWith(
@@ -578,14 +583,9 @@ class TransmissionController extends Notifier<TransmissionState> {
       final liveNetwork = ref.read(networkSimulatorProvider);
       reliability = liveNetwork.reliability;
       latencyMs = liveNetwork.latencyMs;
-      packetLoss = ((100 - reliability) ~/ 4).clamp(0, 60);
-      recoveryPercent = ((reliability - packetLoss).clamp(0, 100));
+      packetLoss = (100 - reliability).clamp(0, 100);
       deliveryTime = (plan.estimatedDeliveryMs + latencyMs + packetLoss * 8)
           .clamp(180, 1800);
-      compressionRatio = (1.0 + (liveNetwork.compressionLevel / 10)).clamp(
-        1.0,
-        2.6,
-      );
       result = simulateSecureTransmission(
         patient: patient,
         previousRecord: previousRecord,
@@ -594,7 +594,15 @@ class TransmissionController extends Notifier<TransmissionState> {
         chunkSize: liveNetwork.chunkSize,
         urgent: patient.urgent,
         retryAttempt: step ~/ 20,
+        randomSeed: queued.randomSeed == null
+            ? null
+            : queued.randomSeed! + step,
       );
+      packetLoss = result.chunksSent == 0
+          ? 0
+          : ((result.lostPieces / result.chunksSent) * 100).round();
+      recoveryPercent = result.survivalPercent;
+      compressionRatio = result.compressionRatio;
       final recoveryStrategy = liveNetwork.activeStrategy == 'RS'
           ? const ReedSolomonRecoveryStrategy()
           : const XorParityRecoveryStrategy();
@@ -605,14 +613,12 @@ class TransmissionController extends Notifier<TransmissionState> {
         recoveredFields: result.delta.changedFields,
         checksumMatched: result.checksumMatch,
       );
-      recoveryConfidencePercent = recoveryResult.confidencePercent;
+      recoveryConfidencePercent = result.recoveryConfidencePercent;
       recoveryMessage = recoveryResult.message;
       recoveryState = recoveryResult.state.name;
-      if (packetLoss > 0) {
-        for (var index = 0; index < packetLoss; index++) {
-          missingChunkIds.add('chunk-${index + 1}');
-        }
-      }
+      missingChunkIds
+        ..clear()
+        ..addAll(result.missingChunkIds);
       if (step == 100 && !result.rebuilt) {
         retransmittedChunkIds.addAll(missingChunkIds.take(2));
       }
@@ -711,6 +717,8 @@ class TransmissionController extends Notifier<TransmissionState> {
       logs: [
         if (patient.urgent)
           'URGENT — expedited fallback triggered'.toUpperCase(),
+        ...result.stageLog,
+        'Recovery confidence: ${result.recoveryConfidencePercent}% from bounded parity groups.',
         '${result.lostPieces} chunks dropped; ${result.chunksUsed} rebuilt.',
         'Checksum ${result.checksumMatch ? 'matched' : 'mismatched'}: '
             '${result.sourceChecksum}.',
