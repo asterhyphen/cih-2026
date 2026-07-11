@@ -49,38 +49,35 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
     final canSend =
         patient != null && captureState.valid && patient.isValidForSend;
 
-    ref.listen<NfcState>(
-      nfcProvider,
-      (previous, next) {
-        if (next.showGuide && next.status == 'scanning' && !_scanDialogVisible) {
-          _presentScanDialog();
-        } else if (_scanDialogVisible &&
-            (!next.showGuide || next.status != 'scanning')) {
-          if (Navigator.canPop(context)) {
-            Navigator.of(context, rootNavigator: true).pop();
-          }
-          if (mounted) {
-            setState(() => _scanDialogVisible = false);
-          }
+    ref.listen<NfcState>(nfcProvider, (previous, next) {
+      if (next.showGuide && next.status == 'scanning' && !_scanDialogVisible) {
+        _presentScanDialog();
+      } else if (_scanDialogVisible &&
+          (!next.showGuide || next.status != 'scanning')) {
+        if (Navigator.canPop(context)) {
+          Navigator.of(context, rootNavigator: true).pop();
         }
+        if (mounted) {
+          setState(() => _scanDialogVisible = false);
+        }
+      }
 
-        if (previous?.message != next.message && next.status != 'scanning') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              behavior: SnackBarBehavior.floating,
-              content: Text(next.message),
-              action: next.requiresPermission
-                  ? SnackBarAction(
-                      label: 'Manual entry',
-                      onPressed: () =>
-                          ref.read(nfcProvider.notifier).loadFallback(),
-                    )
-                  : null,
-            ),
-          );
-        }
-      },
-    );
+      if (previous?.message != next.message && next.status != 'scanning') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(next.message),
+            action: next.requiresPermission
+                ? SnackBarAction(
+                    label: 'Manual entry',
+                    onPressed: () =>
+                        ref.read(nfcProvider.notifier).loadFallback(),
+                  )
+                : null,
+          ),
+        );
+      }
+    });
 
     return Scaffold(
       body: AnimatedPageWrapper(
