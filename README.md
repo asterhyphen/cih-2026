@@ -42,6 +42,9 @@ MedGate is not a finished medical product. It is a proof-of-concept experience f
 - Transmission state now tracks missing chunks, retransmission activity, and recovery progress
 - The network simulator exposes active strategy, chunk size, compression level, redundancy, and parity settings
 - The redundancy control is a live tradeoff: higher parity survives more random loss but increases final on-wire bytes; lower parity keeps transmissions smaller but fails sooner as loss increases
+- **Reed-Solomon Image Tier Recovery**: The same XOR/Reed-Solomon erasure coding pipeline used for clinical vitals delta is applied to image tile payloads, enabling photos to survive network losses.
+- **Image Recovery Visual Demo**: Specialist console renders side-by-side or toggled visual comparisons of naive uncorrected transmissions (corrupted/missing tile blocks) vs rebuilt error-corrected outputs, displaying real-time loss and recovery statistics.
+- **Clinical Alert System**: Glass-style persistable banner notifications and transient SnackBar toast overlays mapped directly to real events (critical rebuild failure, degraded channel, satellite/cellular fallback activation, NFC hardware warning, implausible vital entry).
 
 ### Platform and UX polish
 - Android-focused UX patterns and NFC guidance

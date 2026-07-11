@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/debug/presentation/component_gallery_page.dart';
 import '../../features/home/presentation/home_page.dart';
 import '../../features/network_simulator/presentation/network_simulator_page.dart';
 import '../../features/nfc_capture/presentation/nfc_capture_page.dart';
@@ -16,6 +18,7 @@ class AppRoutes {
   static const networkSimulator = '/network-simulator';
   static const specialist = '/specialist';
   static const settings = '/settings';
+  static const componentGallery = '/component-gallery';
 }
 
 CustomTransitionPage<void> _fadeTransitionPage(GoRouterState state, Widget child) {
@@ -61,6 +64,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settings,
         pageBuilder: (context, state) => _fadeTransitionPage(state, const SettingsPage()),
       ),
+      if (kDebugMode)
+        GoRoute(
+          path: AppRoutes.componentGallery,
+          pageBuilder: (context, state) => _fadeTransitionPage(state, const ComponentGalleryPage()),
+        ),
     ],
   );
 });

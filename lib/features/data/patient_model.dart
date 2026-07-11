@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'patient_schema.dart';
 
 class PatientModel {
@@ -68,11 +70,13 @@ class PatientModel {
       age: int.tryParse(data['age'] ?? '') ?? 0,
       bloodPressure: data['bloodPressure']?.trim() ?? data['bp']?.trim() ?? '',
       heartRate: int.tryParse(data['heartRate'] ?? data['hr'] ?? '') ?? 0,
-      oxygenSaturation: int.tryParse(data['oxygenSaturation'] ?? data['spo2'] ?? '') ?? 0,
-      temperature: double.tryParse(data['temperature'] ?? data['temp'] ?? '') ?? 0,
+      oxygenSaturation:
+          int.tryParse(data['oxygenSaturation'] ?? data['spo2'] ?? '') ?? 0,
+      temperature:
+          double.tryParse(data['temperature'] ?? data['temp'] ?? '') ?? 0,
       notes: data['notes']?.trim() ?? '',
       photoRef: data['photoRef']?.trim() ?? data['photo']?.trim() ?? '',
-      urgent: data['urgent']?.toLowerCase() == 'true',
+      urgent: data['urgent']?.toLowerCase() == 'true' || data['urgent'] == '1',
       symptoms: data['symptoms']?.trim() ?? '',
       diagnosis: data['diagnosis']?.trim() ?? '',
       medicalHistory: data['medicalHistory']?.trim() ?? '',
@@ -83,7 +87,7 @@ class PatientModel {
       address: data['address']?.trim() ?? '',
       contactDetails: data['contactDetails']?.trim() ?? '',
       insurance: data['insurance']?.trim() ?? '',
-      gender: data['gender']?.trim() ?? '',
+      gender: PatientSchema.normalizeGenderCode(data['gender'] ?? ''),
       bloodGroup: data['bloodGroup']?.trim() ?? '',
     );
   }
@@ -109,14 +113,17 @@ class PatientModel {
     'address': address,
     'contactDetails': contactDetails,
     'insurance': insurance,
-    'gender': gender,
+    'gender': PatientSchema.normalizeGenderCode(gender),
     'bloodGroup': bloodGroup,
   };
 
   String toPayload() => PatientSchema.encodeValues(toWireMap());
 
+  Uint8List toRecordBytes() => encodePatientRecord(this);
+
   factory PatientModel.fromPayload(String payload) {
-    if (payload.startsWith(PatientSchema.versionPrefix)) {
+    if (payload.startsWith(PatientSchema.binaryPayloadPrefix) ||
+        payload.startsWith(PatientSchema.versionPrefix)) {
       final values = PatientSchema.decodeValues(payload);
       return PatientModel.fromWireMap(values);
     }
@@ -129,6 +136,10 @@ class PatientModel {
       data[part.substring(0, separator)] = part.substring(separator + 1);
     }
     return PatientModel.fromWireMap(data);
+  }
+
+  factory PatientModel.fromRecordBytes(Uint8List bytes) {
+    return decodePatientRecord(bytes);
   }
 
   bool get isValidForSend {
@@ -189,4 +200,12 @@ class PatientModel {
       bloodGroup: bloodGroup ?? this.bloodGroup,
     );
   }
+}
+
+Uint8List encodePatientRecord(PatientModel record) {
+  return PatientSchema.encodeValueBytes(record.toWireMap());
+}
+
+PatientModel decodePatientRecord(Uint8List bytes) {
+  return PatientModel.fromWireMap(PatientSchema.decodeValueBytes(bytes));
 }

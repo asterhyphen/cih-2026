@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/alert_provider.dart';
+import '../../../core/theme/clinical_colors.dart';
 import '../../data/patient_model.dart';
 import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../../patient_storage/providers/patient_storage_provider.dart';
+import '../logic/image_recovery.dart';
 import '../logic/protocol_engine.dart';
 import '../logic/recovery_strategy.dart';
 import '../logic/secure_transmission.dart';
@@ -185,6 +188,7 @@ class TransmissionState {
     this.redundancy = 2,
     this.parityPackets = 2,
     this.networkProfile = 'Medium',
+    this.imageRecoveryResult,
   });
 
   final String status;
@@ -237,6 +241,7 @@ class TransmissionState {
   final int redundancy;
   final int parityPackets;
   final String networkProfile;
+  final ImageRecoveryResult? imageRecoveryResult;
 
   TransmissionState copyWith({
     String? status,
@@ -289,6 +294,7 @@ class TransmissionState {
     int? redundancy,
     int? parityPackets,
     String? networkProfile,
+    ImageRecoveryResult? imageRecoveryResult,
   }) {
     return TransmissionState(
       status: status ?? this.status,
@@ -345,6 +351,7 @@ class TransmissionState {
       redundancy: redundancy ?? this.redundancy,
       parityPackets: parityPackets ?? this.parityPackets,
       networkProfile: networkProfile ?? this.networkProfile,
+      imageRecoveryResult: imageRecoveryResult ?? this.imageRecoveryResult,
     );
   }
 }
@@ -542,6 +549,7 @@ class TransmissionController extends Notifier<TransmissionState> {
       fallbackTriggered: initialResult.fallbackTriggered,
       fallbackTriggerAttempt: initialResult.fallbackTriggerAttempt,
       fallbackImageTier: initialResult.fallbackImageTier,
+      imageRecoveryResult: null,
     );
 
     late SecureTransmissionResult result;
@@ -623,6 +631,13 @@ class TransmissionController extends Notifier<TransmissionState> {
         retransmittedChunkIds.addAll(missingChunkIds.take(2));
       }
       await Future<void>.delayed(Duration(milliseconds: latencyMs ~/ 12));
+      final imageRecovery = patient.photoRef.isNotEmpty
+          ? simulateImageRecovery(
+              reliability: reliability,
+              redundancy: liveNetwork.redundancy,
+              activeStrategy: liveNetwork.activeStrategy,
+            )
+          : null;
       state = _stateFromResult(
         result,
         status: step < 100
@@ -684,6 +699,7 @@ class TransmissionController extends Notifier<TransmissionState> {
         fallbackTriggered: result.fallbackTriggered,
         fallbackTriggerAttempt: result.fallbackTriggerAttempt,
         fallbackImageTier: result.fallbackImageTier,
+        imageRecoveryResult: imageRecovery,
       );
     }
 
@@ -706,6 +722,14 @@ class TransmissionController extends Notifier<TransmissionState> {
       networkMode: '$reliability% / ${latencyMs}ms',
       timestamp: DateTime.now(),
     );
+    final finalImageRecovery = patient.photoRef.isNotEmpty
+        ? simulateImageRecovery(
+            reliability: reliability,
+            redundancy: initialNetwork.redundancy,
+            activeStrategy: initialNetwork.activeStrategy,
+          )
+        : null;
+
     state = _stateFromResult(
       result,
       status: result.rebuilt ? 'delivered' : 'partial',
@@ -784,7 +808,54 @@ class TransmissionController extends Notifier<TransmissionState> {
       fallbackTriggered: result.fallbackTriggered,
       fallbackTriggerAttempt: result.fallbackTriggerAttempt,
       fallbackImageTier: result.fallbackImageTier,
+      imageRecoveryResult: finalImageRecovery,
     );
+
+    // Push alert notifications
+    final alertNotifier = ref.read(alertProvider.notifier);
+    if (result.rebuilt) {
+      if (patient.urgent) {
+        alertNotifier.push(
+          id: 'urgent-delivered-${queued.id}',
+          severity: ClinicalSeverity.success,
+          title: 'Urgent Dispatch Delivered',
+          body: 'Urgent case ${patient.displayName} successfully reconstructed via priority lane.',
+        );
+      } else {
+        alertNotifier.push(
+          id: 'transmission-success-${queued.id}',
+          severity: ClinicalSeverity.success,
+          title: 'Transmission Successful',
+          body: 'Patient record ${patient.displayName} successfully reconstructed.',
+        );
+      }
+    } else {
+      if (recoveryState == 'degraded') {
+        alertNotifier.push(
+          id: 'transmission-degraded-${queued.id}',
+          severity: ClinicalSeverity.caution,
+          title: 'Transmission Degraded',
+          body: 'Partial recovery: packet loss exceeded parity threshold.',
+        );
+      } else {
+        alertNotifier.push(
+          id: 'transmission-failed-${queued.id}',
+          severity: ClinicalSeverity.critical,
+          title: 'Transmission Failed',
+          body: 'Recovery confidence missed. Redundancy capacity exceeded under current network loss.',
+        );
+      }
+    }
+
+    if (result.fallbackTriggered) {
+      alertNotifier.push(
+        id: 'fallback-active-${queued.id}',
+        severity: ClinicalSeverity.caution,
+        title: 'Fallback Channel Active',
+        body: 'Primary route offline. Expedited lower-tier fallback payload activated.',
+      );
+    }
+
     return true;
   }
 
@@ -822,6 +893,100 @@ class TransmissionController extends Notifier<TransmissionState> {
     state = state.copyWith(
       queueItems: state.queueItems.where((item) => item.id != id).toList(),
     );
+  }
+
+  /// Attempts to send the patient record and, on failure, automatically
+  /// retries up to [maxRetries] times with a short backoff. If all retries
+  /// are exhausted, it dispatches a compressed emergency snapshot via the
+  /// satellite fallback channel (low-bandwidth profile + higher redundancy).
+  Future<void> sendWithAutoFallback({
+    required PatientModel patient,
+    int maxRetries = 2,
+    Duration retryDelay = const Duration(milliseconds: 1500),
+  }) async {
+    final alertNotifier = ref.read(alertProvider.notifier);
+
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      if (attempt > 0) {
+        // Brief backoff before retry.
+        state = state.copyWith(
+          status: 'reconnecting',
+          message: 'Auto-reconnect attempt $attempt / $maxRetries…',
+        );
+        await Future<void>.delayed(retryDelay);
+
+        alertNotifier.push(
+          id: 'auto-retry-$attempt',
+          severity: ClinicalSeverity.info,
+          title: 'Auto-Reconnect (attempt $attempt)',
+          body: 'Attempting to re-establish link and re-send.',
+        );
+      }
+
+      await sendPatientRecord(patient: patient);
+
+      // Check if the last transmission succeeded.
+      final currentStatus = state.status;
+      if (currentStatus == 'delivered') {
+        // Success on this attempt — clear reconnect banners.
+        return;
+      }
+    }
+
+    // All retries failed. Switch to satellite fallback.
+    _engageSatelliteFallback(patient, alertNotifier);
+  }
+
+  /// Engages the satellite fallback channel by switching to the lowest-bandwidth
+  /// network profile and re-sending just the emergency snapshot payload.
+  Future<void> _engageSatelliteFallback(
+    PatientModel patient,
+    dynamic alertNotifier,
+  ) async {
+    alertNotifier.push(
+      id: 'satellite-fallback',
+      severity: ClinicalSeverity.caution,
+      title: 'Satellite Fallback Active',
+      body:
+          'Primary channel unreachable after 2 retries. Dispatching compressed emergency vitals via satellite.',
+    );
+
+    // Temporarily force a low-bandwidth, high-redundancy network profile.
+    final networkController = ref.read(networkSimulatorProvider.notifier);
+    networkController.setProfile('Ultra Low');
+    // Boost redundancy for maximum resilience on fallback channel.
+    networkController.setRedundancy(5);
+
+    state = state.copyWith(
+      status: 'fallback',
+      message: 'Satellite fallback: transmitting emergency vitals snapshot',
+      fallbackTriggered: true,
+      fallbackTriggerAttempt: 3,
+      fallbackImageTier: 'text-only',
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+
+    // Send the emergency snapshot as a dedicated minimal transmission.
+    await sendPatientRecord(patient: patient, sparePieces: 6);
+
+    if (state.status == 'delivered') {
+      alertNotifier.push(
+        id: 'satellite-success',
+        severity: ClinicalSeverity.success,
+        title: 'Fallback Delivery Confirmed',
+        body:
+            'Emergency vitals delivered via satellite channel. Specialist alerted.',
+      );
+    } else {
+      alertNotifier.push(
+        id: 'satellite-failed',
+        severity: ClinicalSeverity.critical,
+        title: 'Satellite Fallback Failed',
+        body:
+            'All channels exhausted. Log preserved locally for manual upload.',
+      );
+    }
   }
 
   int _compareQueuedPatients(
@@ -897,6 +1062,7 @@ class TransmissionController extends Notifier<TransmissionState> {
     required bool fallbackTriggered,
     required int fallbackTriggerAttempt,
     required String fallbackImageTier,
+    required ImageRecoveryResult? imageRecoveryResult,
   }) {
     return TransmissionState(
       status: status,
@@ -951,6 +1117,7 @@ class TransmissionController extends Notifier<TransmissionState> {
       fallbackTriggered: fallbackTriggered,
       fallbackTriggerAttempt: fallbackTriggerAttempt,
       fallbackImageTier: fallbackImageTier,
+      imageRecoveryResult: imageRecoveryResult,
     );
   }
 

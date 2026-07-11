@@ -4,11 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/animated_page_wrapper.dart';
+import '../../../core/widgets/clinical_alert.dart';
 import '../../../core/widgets/floating_nav_bar.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/status_pill.dart';
+import '../../data/patient_schema.dart';
 import '../../patient_storage/providers/patient_storage_provider.dart';
 import '../../transmission_engine/logic/chunking.dart';
+import '../../transmission_engine/logic/protocol_engine.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../providers/nfc_provider.dart';
 import 'nfc_scan_dialog.dart';
@@ -85,18 +90,11 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
       }
 
       if (previous?.message != next.message && !guideActive) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            content: Text(next.message),
-            action: next.requiresPermission
-                ? SnackBarAction(
-                    label: 'Manual entry',
-                    onPressed: () =>
-                        ref.read(nfcProvider.notifier).loadFallback(),
-                  )
-                : null,
-          ),
+        ClinicalAlert.showToast(
+          context,
+          severity: next.requiresPermission ? ClinicalSeverity.caution : ClinicalSeverity.info,
+          title: next.requiresPermission ? 'NFC Capture Guide' : 'Contactless Capture',
+          body: next.message,
         );
       }
     });
@@ -146,23 +144,12 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: captureState.requiresPermission
-                                  ? Theme.of(context).colorScheme.errorContainer
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              captureState.status.toUpperCase(),
-                              style: Theme.of(context).textTheme.labelMedium,
-                            ),
+                          StatusPill(
+                            label: captureState.status.toUpperCase(),
+                            icon: Icons.sensors_rounded,
+                            severity: captureState.requiresPermission
+                                ? ClinicalSeverity.critical
+                                : ClinicalSeverity.info,
                           ),
                         ],
                       ),
@@ -171,14 +158,16 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          _InfoPill(
-                            label: 'Validation',
-                            value: captureState.valid ? 'Ready' : 'Pending',
+                          StatusPill(
+                            label: 'Validation: ${captureState.valid ? 'Ready' : 'Pending'}',
+                            icon: Icons.fact_check_rounded,
+                            severity: captureState.valid ? ClinicalSeverity.success : ClinicalSeverity.caution,
                           ),
                           const SizedBox(width: 8),
-                          _InfoPill(
-                            label: 'Confidence',
-                            value: '${captureState.confidence}%',
+                          StatusPill(
+                            label: 'Confidence: ${captureState.confidence}%',
+                            icon: Icons.replay_circle_filled_rounded,
+                            severity: captureState.confidence >= 90 ? ClinicalSeverity.success : ClinicalSeverity.caution,
                           ),
                         ],
                       ),
@@ -230,34 +219,15 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 12),
-                        _SourceBadge(source: captureState.captureSource),
-                        const SizedBox(height: 8),
-                        if (patient.urgent)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.errorContainer,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.emergency_rounded, size: 16),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Urgent case',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.labelMedium,
-                                ),
-                              ],
-                            ),
-                          ),
+                        Row(
+                          children: [
+                            StatusPill.capture(captureState.captureSource),
+                            if (patient.urgent) ...[
+                              const SizedBox(width: 8),
+                              StatusPill.priority(ClinicalPriority.critical),
+                            ],
+                          ],
+                        ),
                         if (diffLines.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           _DiffSummary(lines: diffLines),
@@ -285,9 +255,10 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                               .read(nfcProvider.notifier)
                               .updateVitals(age: int.tryParse(value)),
                         ),
-                        _VitalField(
-                          label: 'Gender',
-                          value: patient.gender,
+                        _GenderRadioGroup(
+                          value: PatientSchema.normalizeGenderCode(
+                            patient.gender,
+                          ),
                           onChanged: (value) => ref
                               .read(nfcProvider.notifier)
                               .updateVitals(gender: value),
@@ -485,16 +456,12 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                         children: chunks
                             .take(8)
                             .map(
-                              (chunk) => Chip(
-                                avatar: Icon(
-                                  chunk.parity
-                                      ? Icons.add_link_rounded
-                                      : Icons.view_module_rounded,
-                                  size: 18,
-                                ),
-                                label: Text(
-                                  '${chunk.parity ? 'P' : 'D'}${chunk.index}:${chunk.retrievalBit}',
-                                ),
+                              (chunk) => StatusPill(
+                                label: '${chunk.parity ? 'P' : 'D'}${chunk.index}:${chunk.retrievalBit}',
+                                icon: chunk.parity
+                                    ? Icons.add_link_rounded
+                                    : Icons.view_module_rounded,
+                                severity: chunk.parity ? ClinicalSeverity.caution : ClinicalSeverity.success,
                               ),
                             )
                             .toList(),
@@ -514,58 +481,7 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
   }
 }
 
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.label, required this.value});
 
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: ', style: Theme.of(context).textTheme.labelMedium),
-          Text(value, style: Theme.of(context).textTheme.labelMedium),
-        ],
-      ),
-    );
-  }
-}
-
-class _SourceBadge extends StatelessWidget {
-  const _SourceBadge({required this.source});
-
-  final String source;
-
-  @override
-  Widget build(BuildContext context) {
-    final isNfc = source == 'nfc';
-    final label = isNfc ? 'Captured by NFC' : 'Manual fallback';
-    final icon = isNfc ? Icons.nfc_rounded : Icons.edit_note_rounded;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 6),
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
-        ],
-      ),
-    );
-  }
-}
 
 class _DiffSummary extends StatelessWidget {
   const _DiffSummary({required this.lines});
@@ -745,6 +661,69 @@ class _VitalField extends StatefulWidget {
 
   @override
   State<_VitalField> createState() => _VitalFieldState();
+}
+
+class _GenderRadioGroup extends StatelessWidget {
+  const _GenderRadioGroup({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = value == '1' ? '1' : '0';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Gender', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Row(
+            key: const Key('gender-radio-group'),
+            children: [
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: RadioListTile<String>(
+                    key: const Key('gender-male-radio'),
+                    contentPadding: EdgeInsets.zero,
+                    value: '0',
+                    groupValue: selected,
+                    onChanged: (value) {
+                      if (value != null) {
+                        onChanged(value);
+                      }
+                    },
+                    title: const Text('Male'),
+                    secondary: const Icon(Icons.male_rounded),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: RadioListTile<String>(
+                    key: const Key('gender-female-radio'),
+                    contentPadding: EdgeInsets.zero,
+                    value: '1',
+                    groupValue: selected,
+                    onChanged: (value) {
+                      if (value != null) {
+                        onChanged(value);
+                      }
+                    },
+                    title: const Text('Female'),
+                    secondary: const Icon(Icons.female_rounded),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _VitalFieldState extends State<_VitalField> {

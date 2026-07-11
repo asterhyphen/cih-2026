@@ -26,9 +26,16 @@ class PatientRecordDiff {
     return changedFields
         .map(
           (field) =>
-              '$field changed: ${previousValues[field] ?? ''} -> ${currentValues[field] ?? ''}',
+              '$field changed: ${_displayValue(field, previousValues[field])} -> ${_displayValue(field, currentValues[field])}',
         )
         .toList();
+  }
+
+  String _displayValue(String field, String? value) {
+    if (field == 'gender') {
+      return PatientSchema.genderLabel(value ?? '');
+    }
+    return value ?? '';
   }
 }
 
@@ -140,7 +147,7 @@ class PatientRecordStore {
         address TEXT NOT NULL,
         contact_details TEXT NOT NULL,
         insurance TEXT NOT NULL,
-        gender TEXT NOT NULL,
+        gender INTEGER NOT NULL,
         blood_group TEXT NOT NULL
       )
     ''');
@@ -248,7 +255,8 @@ class PatientRecordStore {
       'address': patient.address,
       'contact_details': patient.contactDetails,
       'insurance': patient.insurance,
-      'gender': patient.gender,
+      'gender':
+          int.tryParse(PatientSchema.normalizeGenderCode(patient.gender)) ?? 0,
       'blood_group': patient.bloodGroup,
     };
   }

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/animated_page_wrapper.dart';
 import '../../../core/widgets/floating_nav_bar.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/status_pill.dart';
+import '../../../core/widgets/section_divider.dart';
 import '../../nfc_capture/providers/nfc_provider.dart';
+import '../../transmission_engine/logic/recovery_strategy.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../providers/network_simulator_provider.dart';
 
@@ -17,6 +21,7 @@ class NetworkSimulatorPage extends ConsumerWidget {
     final captureState = ref.watch(nfcProvider);
     final transmission = ref.watch(transmissionProvider);
     final patient = captureState.patient;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Future<void> runTransmission() async {
       if (patient == null || !patient.isValidForSend) {
@@ -26,6 +31,12 @@ class NetworkSimulatorPage extends ConsumerWidget {
           .read(transmissionProvider.notifier)
           .sendPatientRecord(patient: patient, sparePieces: 2);
     }
+
+    final valueStyle = AppTheme.monoTextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.bold,
+      color: isDark ? Colors.white : Colors.black87,
+    );
 
     return Scaffold(
       body: AnimatedPageWrapper(
@@ -37,7 +48,9 @@ class NetworkSimulatorPage extends ConsumerWidget {
               children: [
                 Text(
                   'Network Simulator',
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 16),
                 GlassContainer(
@@ -45,11 +58,19 @@ class NetworkSimulatorPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Transport',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        'Transport Settings',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
-                      const SizedBox(height: 8),
-                      Text('Reliability: ${state.reliability}%'),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Reliability', style: Theme.of(context).textTheme.bodyMedium),
+                          Text('${state.reliability}%', style: valueStyle),
+                        ],
+                      ),
                       Slider(
                         value: state.reliability.toDouble(),
                         min: 35,
@@ -64,7 +85,13 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         },
                       ),
                       const SizedBox(height: 8),
-                      Text('Latency: ${state.latencyMs}ms'),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Latency', style: Theme.of(context).textTheme.bodyMedium),
+                          Text('${state.latencyMs} ms', style: valueStyle),
+                        ],
+                      ),
                       Slider(
                         value: state.latencyMs.toDouble(),
                         min: 60,
@@ -79,7 +106,13 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         },
                       ),
                       const SizedBox(height: 8),
-                      Text('Redundancy: ${state.redundancy} parity pieces'),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Redundancy', style: Theme.of(context).textTheme.bodyMedium),
+                          Text('${state.redundancy} groups', style: valueStyle),
+                        ],
+                      ),
                       Slider(
                         value: state.redundancy.toDouble(),
                         min: 0,
@@ -93,7 +126,7 @@ class NetworkSimulatorPage extends ConsumerWidget {
                           runTransmission();
                         },
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -101,11 +134,15 @@ class NetworkSimulatorPage extends ConsumerWidget {
                           _InfoPill(label: 'Mode', value: state.mode),
                           _InfoPill(label: 'Risk', value: state.deliveryImpact),
                           _InfoPill(label: 'Signal', value: state.qualityLabel),
-                          _InfoPill(
-                            label: 'Strategy',
-                            value: state.activeStrategy,
-                          ),
+                          _InfoPill(label: 'Strategy', value: state.activeStrategy),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Profile Presets',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -125,33 +162,34 @@ class NetworkSimulatorPage extends ConsumerWidget {
                             .read(networkSimulatorProvider.notifier)
                             .setCompareMode(value),
                         title: const Text('Compare mode'),
+                        subtitle: const TextStyle(fontSize: 11, color: Colors.grey) != null
+                            ? const Text('Simulate MedGate vs Naive (Standard) app side-by-side')
+                            : null,
                         secondary: const Icon(Icons.compare_arrows_rounded),
                       ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
-                          FilledButton(
-                            onPressed: () {
-                              ref
-                                  .read(networkSimulatorProvider.notifier)
-                                  .setMode('stable');
-                              runTransmission();
-                            },
-                            child: const Text('Stable'),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                ref.read(networkSimulatorProvider.notifier).setMode('stable');
+                                runTransmission();
+                              },
+                              icon: const Icon(Icons.check_circle_rounded),
+                              label: const Text('Preset Stable'),
+                            ),
                           ),
-                          OutlinedButton(
-                            onPressed: () {
-                              ref
-                                  .read(networkSimulatorProvider.notifier)
-                                  .setMode('degraded');
-                              runTransmission();
-                            },
-                            child: const Text('Degraded'),
-                          ),
-                          FilledButton.tonal(
-                            onPressed: runTransmission,
-                            child: const Text('Run'),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                ref.read(networkSimulatorProvider.notifier).setMode('degraded');
+                                runTransmission();
+                              },
+                              icon: const Icon(Icons.gpp_maybe_rounded),
+                              label: const Text('Preset Degraded'),
+                            ),
                           ),
                         ],
                       ),
@@ -164,51 +202,65 @@ class NetworkSimulatorPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Live proof',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        'Transmission Audit & Proof',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       const SizedBox(height: 12),
                       _ResilienceGauge(score: transmission.resilienceScore),
-                      const SizedBox(height: 12),
-                      if (state.compareMode)
+                      const SizedBox(height: 16),
+                      if (state.compareMode) ...[
                         _CompareStrip(
                           medGate: '${transmission.survivalPercent}% rebuilt',
                           naive: transmission.normalAppStatus,
                           medGateOk: transmission.rebuilt,
                           naiveOk: transmission.normalAppStatus == 'Delivered',
                         ),
+                        const SizedBox(height: 16),
+                      ],
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.02),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            _LogStat(label: 'Bandwidth Budget', value: '${transmission.bandwidthBudget} kbps', style: valueStyle),
+                            _LogStat(label: 'Current Usage', value: '${transmission.currentUsage} kbps', style: valueStyle),
+                            _LogStat(label: 'Remaining Budget', value: '${transmission.remainingBudget} kbps', style: valueStyle),
+                            _LogStat(label: 'Compression Ratio', value: '${transmission.compressionRatio.toStringAsFixed(2)}x', style: valueStyle),
+                            _LogStat(label: 'Packet Loss Roll', value: '${transmission.packetLoss}%', style: valueStyle),
+                            _LogStat(label: 'Delivery Latency', value: '${transmission.latency} ms', style: valueStyle),
+                            _LogStat(label: 'Recovery Ratio', value: '${transmission.recoveryPercent}%', style: valueStyle),
+                            _LogStat(label: 'Est. Delivery Time', value: '${transmission.estimatedDeliveryTime} ms', style: valueStyle),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       Text(
-                        'Bandwidth Budget: ${transmission.bandwidthBudget} kbps',
+                        transmission.proofSummary,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
                       ),
-                      Text('Current Usage: ${transmission.currentUsage} kbps'),
+                      const SectionDivider(),
                       Text(
-                        'Remaining Budget: ${transmission.remainingBudget} kbps',
-                      ),
-                      Text(
-                        'Compression Ratio: ${transmission.compressionRatio.toStringAsFixed(2)}x',
-                      ),
-                      Text('Packet Loss: ${transmission.packetLoss}%'),
-                      Text('Latency: ${transmission.latency} ms'),
-                      Text('Recovery %: ${transmission.recoveryPercent}%'),
-                      Text(
-                        'Estimated Delivery Time: ${transmission.estimatedDeliveryTime} ms',
-                      ),
-                      const SizedBox(height: 12),
-                      Text(transmission.proofSummary),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Integrity log',
-                        style: Theme.of(context).textTheme.labelLarge,
+                        'Integrity Log',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       const SizedBox(height: 8),
                       if (transmission.receipts.isEmpty)
-                        const _EmptyLine(
-                          icon: Icons.receipt_long_outlined,
-                          text: 'No transmissions yet',
+                        const Row(
+                          children: [
+                            Icon(Icons.receipt_long_outlined, size: 20),
+                            SizedBox(width: 8),
+                            Text('No transmissions logged yet', style: TextStyle(fontSize: 12)),
+                          ],
                         )
                       else
-                        ...transmission.receipts.take(5).map(_ReceiptRow.new),
+                        ...transmission.receipts.take(4).map((r) => _ReceiptRow(r)),
                     ],
                   ),
                 ),
@@ -247,12 +299,13 @@ class _ResilienceGauge extends StatelessWidget {
             tween: Tween<double>(begin: 0, end: score / 100),
             duration: const Duration(milliseconds: 500),
             builder: (context, value, _) => SizedBox(
-              width: 58,
-              height: 58,
+              width: 50,
+              height: 50,
               child: CircularProgressIndicator(
                 value: value,
-                strokeWidth: 7,
+                strokeWidth: 6,
                 color: color,
+                backgroundColor: color.withValues(alpha: 0.15),
               ),
             ),
           ),
@@ -262,15 +315,16 @@ class _ResilienceGauge extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Resilience Score',
-                  style: Theme.of(context).textTheme.labelLarge,
+                  'FEC Resilience Score',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
+                const SizedBox(height: 2),
                 TweenAnimationBuilder<double>(
                   tween: Tween<double>(begin: 0, end: score.toDouble()),
                   duration: const Duration(milliseconds: 500),
                   builder: (context, value, _) => Text(
                     '${value.round()}%',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -300,11 +354,11 @@ class _CompareStrip extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _CompareTile(label: 'MedGate', value: medGate, ok: medGateOk),
+          child: _CompareTile(label: 'MedGate (FEC)', value: medGate, ok: medGateOk),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: _CompareTile(label: 'Naive', value: naive, ok: naiveOk),
+          child: _CompareTile(label: 'Naive (TCP-like)', value: naive, ok: naiveOk),
         ),
       ],
     );
@@ -330,19 +384,29 @@ class _CompareTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            ok ? Icons.check_circle_rounded : Icons.error_rounded,
-            color: color,
+          Row(
+            children: [
+              Icon(
+                ok ? Icons.check_circle_rounded : Icons.error_rounded,
+                color: color,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(label, style: Theme.of(context).textTheme.labelLarge),
-          Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 6),
+          Text(value, style: const TextStyle(fontSize: 12)),
         ],
       ),
     );
@@ -356,27 +420,54 @@ class _ReceiptRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = receipt.checksumMatch
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.error;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final timeStr = "${receipt.timestamp.hour.toString().padLeft(2, '0')}:${receipt.timestamp.minute.toString().padLeft(2, '0')}:${receipt.timestamp.second.toString().padLeft(2, '0')}";
+
+    final recoveryState = receipt.checksumMatch
+        ? RecoveryState.fullRecovery
+        : receipt.chunksDropped == 0
+            ? RecoveryState.fullRecovery
+            : receipt.chunksUsed > 0
+                ? RecoveryState.recovered
+                : RecoveryState.failed;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            receipt.checksumMatch
-                ? Icons.verified_rounded
-                : Icons.warning_rounded,
-            color: color,
+            receipt.checksumMatch ? Icons.gpp_good_rounded : Icons.gpp_maybe_rounded,
+            color: receipt.checksumMatch ? Colors.green : Colors.amber,
             size: 20,
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              '${receipt.chunksSent} sent, ${receipt.chunksDropped} dropped, '
-              '${receipt.chunksUsed} rebuilt. Hash '
-              '${receipt.checksumMatch ? 'matched' : 'mismatched'}.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  receipt.checksumMatch ? 'Checksum Matched' : ' FEC Partial Rebuild',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${receipt.chunksSent} sent · ${receipt.chunksDropped} lost · ${receipt.chunksUsed} reconstructed',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          StatusPill.recovery(recoveryState),
+          const SizedBox(width: 8),
+          Text(
+            timeStr,
+            style: AppTheme.monoTextStyle(
+              fontSize: 10,
+              color: isDark ? Colors.white38 : Colors.black38,
             ),
           ),
         ],
@@ -393,9 +484,13 @@ class _InfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
-      avatar: const Icon(Icons.network_check_rounded, size: 18),
-      label: Text('$label: $value'),
+    final severity = label.toLowerCase().contains('risk')
+        ? (value.toLowerCase().contains('low') ? ClinicalSeverity.success : ClinicalSeverity.caution)
+        : ClinicalSeverity.info;
+    return StatusPill(
+      label: '$label: $value',
+      icon: Icons.network_check_rounded,
+      severity: severity,
     );
   }
 }
@@ -419,16 +514,30 @@ class _ProfileChip extends ConsumerWidget {
   }
 }
 
-class _EmptyLine extends StatelessWidget {
-  const _EmptyLine({required this.icon, required this.text});
+class _LogStat extends StatelessWidget {
+  const _LogStat({required this.label, required this.value, required this.style});
 
-  final IconData icon;
-  final String text;
+  final String label;
+  final String value;
+  final TextStyle style;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(text)],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+          Text(
+            value,
+            style: style.copyWith(fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }

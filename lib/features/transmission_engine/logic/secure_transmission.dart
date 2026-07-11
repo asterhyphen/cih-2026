@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:encrypt/encrypt.dart';
 
 import '../../data/patient_model.dart';
+import '../../data/patient_schema.dart';
 import 'chunking.dart';
 import 'delta_encoder.dart';
 import 'priority_queue.dart';
@@ -122,18 +123,11 @@ SecureTransmissionResult simulateSecureTransmission({
         priority: TransmissionPriority.media,
       ),
   ]);
-  final rawPayload = queue
-      .map((item) => '${item.label}:${item.payload}:${item.priority.name}')
-      .join(';');
-  final basePayload = queue
-      .map(
-        (item) =>
-            [_compact(item.label), item.payload, item.priority.index].join(','),
-      )
-      .join(';');
+  final rawPayload = PatientSchema.encodeDelimitedValues(patient.toWireMap());
+  final recordBytes = encodePatientRecord(patient);
   // Compress before encrypt so the payload is reduced with DEFLATE/gzip and the
   // ciphertext does not remain as raw, incompressible noise.
-  final compressedPayload = _compressPayload(basePayload);
+  final compressedPayload = _compressBytes(recordBytes);
   final encryptedPayload = _encrypted(compressedPayload);
   final chunks = buildProtectedChunks(
     encryptedPayload,
@@ -171,7 +165,7 @@ SecureTransmissionResult simulateSecureTransmission({
       : _checksum('partial:${recovery.payload}');
   final survival = rebuilt ? 100 : recovery.confidencePercent;
   final originalBytes = utf8.encode(rawPayload).length;
-  final encodedBytes = utf8.encode(basePayload).length;
+  final encodedBytes = recordBytes.length;
   final compressedBytes = base64.decode(compressedPayload).length;
   final encryptedBytes = utf8.encode(encryptedPayload).length;
   final finalBytes = chunks.fold<int>(
@@ -223,6 +217,10 @@ SecureTransmissionResult simulateSecureTransmission({
 
 String _compressPayload(String value) {
   final input = utf8.encode(value);
+  return _compressBytes(input);
+}
+
+String _compressBytes(List<int> input) {
   final gzip = GZipEncoder();
   final output = gzip.encode(input, level: 9);
   return base64.encode(output);
@@ -249,14 +247,6 @@ double _compressionRatio(String original, int compressedBytes) {
     return 1.0;
   }
   return (originalBytes / compressedBytes).clamp(0.0, 10.0);
-}
-
-String _compact(String value) {
-  return value
-      .split(RegExp(r'[^A-Za-z0-9]+'))
-      .where((part) => part.isNotEmpty)
-      .map((part) => part.substring(0, part.length < 3 ? part.length : 3))
-      .join();
 }
 
 List<String> _stageLog({

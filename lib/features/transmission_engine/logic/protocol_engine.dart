@@ -1,4 +1,5 @@
 import '../../data/patient_model.dart';
+import '../../data/patient_schema.dart';
 
 /// Clinical priority levels used to sort and protect the most important
 /// patient information before lower-value fields are transmitted.
@@ -136,7 +137,7 @@ ClinicalTransmissionPlan buildClinicalTransmissionPlan(PatientModel patient) {
       ClinicalField(
         key: 'gender',
         label: 'Gender',
-        value: patient.gender,
+        value: PatientSchema.genderLabel(patient.gender),
         priority: ClinicalPriority.medium,
       ),
     if (patient.address.trim().isNotEmpty)
@@ -169,7 +170,8 @@ ClinicalTransmissionPlan buildClinicalTransmissionPlan(PatientModel patient) {
       patient.temperature > 0) {
     sections.add(TransmissionSection.vitals);
   }
-  if (patient.symptoms.trim().isNotEmpty || patient.diagnosis.trim().isNotEmpty) {
+  if (patient.symptoms.trim().isNotEmpty ||
+      patient.diagnosis.trim().isNotEmpty) {
     sections.add(TransmissionSection.symptoms);
   }
   if (patient.medicalHistory.trim().isNotEmpty || patient.age > 0) {

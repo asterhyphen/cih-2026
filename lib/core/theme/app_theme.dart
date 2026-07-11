@@ -1,7 +1,9 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+export 'clinical_colors.dart';
 
 class _FallbackPreferences implements SharedPreferences {
   final Map<String, Object> _values = <String, Object>{};
@@ -108,6 +110,14 @@ class AppTheme {
 
   static ThemeData themeData(ThemeMode mode) =>
       mode == ThemeMode.dark ? darkTheme() : lightTheme();
+
+  static TextStyle monoTextStyle({double? fontSize, FontWeight? fontWeight, Color? color}) =>
+      GoogleFonts.jetBrainsMono(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
 }
 
 final sharedPreferencesProvider = Provider<SharedPreferences>(

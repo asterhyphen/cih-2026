@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/animated_page_wrapper.dart';
@@ -255,6 +257,46 @@ class SettingsPage extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        'Developer Options',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      GlassContainer(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Component Gallery',
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: isDark ? Colors.white54 : Colors.black45,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Inspect and test clinical UI components in isolation.',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: isDark ? Colors.white30 : Colors.black38,
+                                  ),
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: () => context.go('/component-gallery'),
+                                icon: const Icon(Icons.palette_rounded),
+                                label: const Text('Open Gallery'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

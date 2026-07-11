@@ -9,7 +9,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-PatientModel _patient({int heartRate = 76, String bp = '120/80'}) {
+PatientModel _patient({
+  int heartRate = 76,
+  String bp = '120/80',
+  String gender = '0',
+}) {
   return PatientModel(
     id: 'P1',
     displayName: 'Ada Lovelace',
@@ -20,6 +24,7 @@ PatientModel _patient({int heartRate = 76, String bp = '120/80'}) {
     temperature: 36.7,
     notes: 'Stable',
     photoRef: 'photo-1',
+    gender: gender,
   );
 }
 
@@ -71,6 +76,22 @@ void main() {
     final confirmed = (await store.read('P1'))!.confirmedPatient!;
     expect(container.read(transmissionProvider).rebuilt, isFalse);
     expect(confirmed.heartRate, 76);
+  });
+
+  test('stores gender as schema code and flags gender deltas', () async {
+    final store = await _store('medgate-gender');
+    addTearDown(store.close);
+
+    await store.markTransmissionConfirmed(_patient(gender: '0'));
+    final diff = await store.stageCapture(_patient(gender: '1'));
+    final pending = (await store.read('P1'))!.pendingPatient!;
+
+    expect(pending.gender, '1');
+    expect(diff.changedFields, contains('gender'));
+    expect(
+      diff.summaries(pending, _patient(gender: '0')).single,
+      contains('Male -> Female'),
+    );
   });
 
   test('successful transmission overwrites the confirmed baseline', () async {

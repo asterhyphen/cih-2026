@@ -11,3 +11,5 @@
 - Recovery is bounded by redundancy math: a group with loss beyond its parity/correction capacity must report partial or failed recovery instead of fabricating success, and confidence must come from actual recovered groups.
 - Urgency is a manual intake flag that flows through the patient model, transmission engine, queue state, and integrity log so urgent cases are visibly treated differently without introducing AI inference.
 - Patient storage uses a compare-then-overwrite rule: stage local captures as pending, compare deltas against the last confirmed database baseline, and overwrite that baseline only after specialist-side reconstruction is confirmed successful.
+- ClinicalAlert is the mandatory component for any user-facing status event going forward; do not write custom SnackBar toasts or inline banners.
+- All status, priority, sync, and transport indicators must use StatusPill; do not write ad-hoc colored text badges or raw Chip widgets.

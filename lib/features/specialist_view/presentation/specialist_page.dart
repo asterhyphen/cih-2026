@@ -5,14 +5,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/routing/app_router.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/animated_page_wrapper.dart';
+import '../../../core/widgets/clinical_alert.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../../core/widgets/section_divider.dart';
+import '../../../core/widgets/status_pill.dart';
 import '../../data/patient_model.dart';
+import '../../data/patient_schema.dart';
 import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../../nfc_capture/providers/nfc_provider.dart';
 import '../../transmission_engine/logic/protocol_engine.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../../triage/logic/triage_assessment.dart';
+import 'widgets/image_recovery_demo.dart';
 
 class SpecialistPage extends ConsumerStatefulWidget {
   const SpecialistPage({super.key});
@@ -72,10 +78,14 @@ class _SpecialistPageState extends ConsumerState<SpecialistPage> {
         : transmission.urgentCase;
 
     final assessment = evaluateTriage(
-      payload: activeRecord != null ? activeRecord.payload : captureState.payload,
+      payload: activeRecord != null
+          ? activeRecord.payload
+          : captureState.payload,
       reliability: networkState.reliability,
       latencyMs: networkState.latencyMs,
     );
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: AnimatedPageWrapper(
@@ -95,19 +105,33 @@ class _SpecialistPageState extends ConsumerState<SpecialistPage> {
                     Expanded(
                       child: Text(
                         'Doctor Console',
-                        style: Theme.of(context).textTheme.headlineMedium,
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
+                if (!rebuilt && hasRecords)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: ClinicalAlert(
+                      severity: ClinicalSeverity.critical,
+                      title: 'Critical Rebuild Missed',
+                      body: 'Redundancy threshold exceeded. Displaying partial emergency snapshot data only.',
+                      dismissible: false,
+                    ),
+                  ),
                 GlassContainer(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Received patient data',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        'Received patient details',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       const SizedBox(height: 12),
                       _IntegrityBanner(
@@ -115,83 +139,41 @@ class _SpecialistPageState extends ConsumerState<SpecialistPage> {
                         rebuilt: rebuilt,
                         urgent: urgent,
                       ),
-                      const SizedBox(height: 12),
-                      if (transmission.priorityFields.isNotEmpty) ...[
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: transmission.priorityFields.take(8).map((
-                            field,
-                          ) {
-                            final color =
-                                field.priority == ClinicalPriority.critical
-                                ? Theme.of(context).colorScheme.error
-                                : field.priority == ClinicalPriority.high
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.secondary;
-                            return Chip(
-                              avatar: Icon(
-                                Icons.local_hospital_rounded,
-                                color: color,
-                                size: 18,
-                              ),
-                              label: Text(
-                                '${field.label} · ${field.priority.name}',
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
+                      const SizedBox(height: 16),
                       _DoctorPatientSummary(
                         patient: rebuiltPatient,
                         payload: doctorPayload,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          _InfoChip(
-                            icon: captureState.captureSource == 'nfc'
-                                ? Icons.nfc_rounded
-                                : Icons.edit_note_rounded,
-                            label: 'Source',
-                            value: captureState.captureSource == 'nfc'
-                                ? 'NFC'
-                                : 'Manual',
-                          ),
-                          _InfoChip(
-                            icon: Icons.network_check_rounded,
-                            label: 'Network',
-                            value: networkState.mode,
-                          ),
-                          _InfoChip(
+                          StatusPill.capture(captureState.captureSource),
+                          StatusPill.transport(networkState.mode),
+                          StatusPill.transport(urgent ? 'Urgent' : 'Routine'),
+                          StatusPill(
+                            label: 'Survival: ${transmission.survivalPercent}%',
                             icon: Icons.health_and_safety_rounded,
-                            label: 'Survival',
-                            value: '${transmission.survivalPercent}%',
+                            severity: transmission.survivalPercent >= 80 ? ClinicalSeverity.success : ClinicalSeverity.caution,
                           ),
-                          _InfoChip(
-                            icon: urgent
-                                ? Icons.emergency_rounded
-                                : Icons.assignment_turned_in_rounded,
-                            label: 'Urgency',
-                            value: urgent
-                                ? 'Urgent'
-                                : 'Routine',
-                          ),
-                          _InfoChip(
+                          StatusPill(
+                            label: 'Confidence: ${transmission.recoveryConfidencePercent}%',
                             icon: Icons.replay_circle_filled_rounded,
-                            label: 'Recovery',
-                            value: '${transmission.recoveryConfidencePercent}%',
+                            severity: transmission.recoveryConfidencePercent >= 90 ? ClinicalSeverity.success : ClinicalSeverity.caution,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SectionDivider(),
                       _ChangedFields(fields: transmission.changedFields),
-                      const SizedBox(height: 12),
+                      const SectionDivider(),
                       _PayloadEvidence(transmission: transmission),
-                      const SizedBox(height: 12),
+                      const SectionDivider(),
+                      ImageRecoveryDemo(
+                        result: transmission.imageRecoveryResult,
+                        photoRef: rebuiltPatient?.photoRef ?? '',
+                      ),
+                      const SectionDivider(),
                       _DeliveredPayloadList(
                         records: records,
                         selectedIndex: _selectedPayloadIndex,
@@ -201,18 +183,25 @@ class _SpecialistPageState extends ConsumerState<SpecialistPage> {
                           });
                         },
                       ),
-                      const SizedBox(height: 12),
+                      const SectionDivider(),
                       Text(
-                        'Triage severity: ${assessment.severity.toUpperCase()}',
+                        'Triage assessment',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       const SizedBox(height: 8),
+                      Text('Triage severity: ${assessment.severity.toUpperCase()}'),
+                      const SizedBox(height: 4),
                       Text('Triage score: ${assessment.score}/100'),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       Text('Recommendation: ${assessment.recommendation}'),
-                      const SizedBox(height: 16),
+                      const SectionDivider(),
                       Text(
                         'Progressive sections',
-                        style: Theme.of(context).textTheme.labelLarge,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -224,46 +213,42 @@ class _SpecialistPageState extends ConsumerState<SpecialistPage> {
                             duration: const Duration(milliseconds: 400),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
-                              vertical: 8,
+                              vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.12),
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: Text(title.toUpperCase()),
+                            child: Text(
+                              title.toUpperCase(),
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 16),
+                      const SectionDivider(),
                       Text(
                         'Queue status',
-                        style: Theme.of(context).textTheme.labelLarge,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       const SizedBox(height: 8),
                       _PacketQueueList(items: transmission.queueItems),
-                      const SizedBox(height: 8),
-                      ...transmission.queueItems
-                          .take(3)
-                          .map(
-                            (item) => Text(
-                              '• ${item.status.toUpperCase()}: ${item.summary}',
-                            ),
-                          ),
-                      const SizedBox(height: 16),
+                      const SectionDivider(),
                       Wrap(
                         spacing: 12,
                         runSpacing: 8,
                         children: [
-                          FilledButton(
+                          FilledButton.icon(
                             onPressed: () => context.go(AppRoutes.home),
-                            child: const Text('Back to dashboard'),
+                            icon: const Icon(Icons.arrow_back_rounded),
+                            label: const Text('Dashboard'),
                           ),
-                          OutlinedButton(
-                            onPressed: () =>
-                                context.go(AppRoutes.networkSimulator),
-                            child: const Text('Review network'),
+                          OutlinedButton.icon(
+                            onPressed: () => context.go(AppRoutes.networkSimulator),
+                            icon: const Icon(Icons.hub_rounded),
+                            label: const Text('Simulator'),
                           ),
                           FilledButton.tonal(
                             onPressed: () => showDialog<void>(
@@ -272,7 +257,7 @@ class _SpecialistPageState extends ConsumerState<SpecialistPage> {
                                 items: transmission.queueItems,
                               ),
                             ),
-                            child: const Text('Packet queue'),
+                            child: const Text('Queue details'),
                           ),
                           FilledButton.tonal(
                             onPressed: () => showDialog<void>(
@@ -288,15 +273,6 @@ class _SpecialistPageState extends ConsumerState<SpecialistPage> {
                               ),
                             ),
                             child: const Text('All payloads'),
-                          ),
-                          FilledButton.tonal(
-                            onPressed: () => showDialog<void>(
-                              context: context,
-                              builder: (context) => _ProtocolOverviewDialog(
-                                transmission: transmission,
-                              ),
-                            ),
-                            child: const Text('Protocol overview'),
                           ),
                         ],
                       ),
@@ -330,13 +306,13 @@ class _DoctorPatientSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final patient = this.patient;
     if (patient == null) {
-      return Text('Received: $payload');
+      return Text('Received encrypted raw payload: $payload');
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _DoctorImagePreview(reference: patient.photoRef),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         _PatientFieldGrid(patient: patient),
       ],
     );
@@ -362,7 +338,7 @@ class _DoctorImagePreview extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
         ),
         clipBehavior: Clip.antiAlias,
         child: hasFile
@@ -375,13 +351,13 @@ class _DoctorImagePreview extends StatelessWidget {
                       isPlaceholder
                           ? Icons.image_search_rounded
                           : Icons.image_not_supported_outlined,
-                      size: 44,
+                      size: 36,
+                      color: Colors.grey,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      trimmed.isEmpty ? 'No image received' : trimmed,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      trimmed.isEmpty ? 'No image reference' : 'Mock photo reference active',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -398,53 +374,141 @@ class _PatientFieldGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fields = <String, String>{
-      'Patient ID': patient.id,
-      'Name': patient.displayName,
-      'Age': patient.age == 0 ? '' : '${patient.age}',
-      'Gender': patient.gender,
-      'Blood group': patient.bloodGroup,
-      'Blood pressure': patient.bloodPressure,
-      'Heart rate': '${patient.heartRate}',
-      'Oxygen saturation': '${patient.oxygenSaturation}',
-      'Temperature': patient.temperature.toStringAsFixed(1),
-      'Symptoms': patient.symptoms,
-      'Diagnosis': patient.diagnosis,
-      'Medical history': patient.medicalHistory,
-      'Current medication': patient.currentMedication,
-      'Allergies': patient.allergies,
-      'Consciousness': patient.consciousness,
-      'Emergency notes': patient.emergencyNotes,
-      'Address': patient.address,
-      'Contact details': patient.contactDetails,
-      'Insurance': patient.insurance,
-      'Clinical notes': patient.notes,
-      'Photo payload ref': patient.photoRef,
-      'Urgent': patient.urgent ? 'Yes' : 'No',
-    };
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final monoStyle = AppTheme.monoTextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.bold,
+      color: isDark ? Colors.white : Colors.black87,
+    );
+
     return Column(
-      children: fields.entries
-          .map(
-            (entry) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 150,
-                    child: Text(
-                      entry.key,
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Vitals Section ──
+        const _SectionHeader(title: 'Patient Vitals'),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.02),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _VitalStat(label: 'BP', value: patient.bloodPressure, style: monoStyle),
+              _VitalStat(label: 'HR', value: '${patient.heartRate} bpm', style: monoStyle),
+              _VitalStat(label: 'SpO2', value: '${patient.oxygenSaturation}%', style: monoStyle),
+              _VitalStat(label: 'TEMP', value: '${patient.temperature.toStringAsFixed(1)}°C', style: monoStyle),
+            ],
+          ),
+        ),
+        const SectionDivider(),
+
+        // ── Identity Section ──
+        const _SectionHeader(title: 'Demographics & identity'),
+        const SizedBox(height: 8),
+        _FieldRow(label: 'Patient ID', value: patient.id),
+        _FieldRow(label: 'Full name', value: patient.displayName),
+        _FieldRow(label: 'Age', value: patient.age == 0 ? '-' : '${patient.age}'),
+        _FieldRow(label: 'Gender', value: PatientSchema.genderLabel(patient.gender)),
+        _FieldRow(label: 'Blood group', value: patient.bloodGroup),
+        _FieldRow(label: 'Contact details', value: patient.contactDetails),
+        _FieldRow(label: 'Address', value: patient.address),
+        _FieldRow(label: 'Insurance', value: patient.insurance),
+        const SectionDivider(),
+
+        // ── Clinical Section ──
+        const _SectionHeader(title: 'Clinical findings'),
+        const SizedBox(height: 8),
+        _FieldRow(label: 'Symptoms', value: patient.symptoms),
+        _FieldRow(label: 'Diagnosis', value: patient.diagnosis),
+        _FieldRow(label: 'Medical history', value: patient.medicalHistory),
+        _FieldRow(label: 'Current medication', value: patient.currentMedication),
+        _FieldRow(label: 'Allergies', value: patient.allergies),
+        _FieldRow(label: 'Consciousness', value: patient.consciousness),
+        _FieldRow(label: 'Clinical notes', value: patient.notes),
+        const SectionDivider(),
+
+        // ── Emergency Section ──
+        const _SectionHeader(title: 'Emergency intake notes'),
+        const SizedBox(height: 8),
+        _FieldRow(label: 'Emergency notes', value: patient.emergencyNotes),
+      ],
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title.toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: kMedicalAccent,
+            letterSpacing: 0.5,
+          ),
+    );
+  }
+}
+
+class _FieldRow extends StatelessWidget {
+  const _FieldRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: isDark ? Colors.white38 : Colors.black38,
                   ),
-                  Expanded(
-                    child: Text(entry.value.trim().isEmpty ? '-' : entry.value),
-                  ),
-                ],
-              ),
             ),
-          )
-          .toList(),
+          ),
+          Expanded(
+            child: Text(
+              value.trim().isEmpty ? '-' : value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VitalStat extends StatelessWidget {
+  const _VitalStat({required this.label, required this.value, required this.style});
+  final String label;
+  final String value;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 2),
+        Text(value, style: style),
+      ],
     );
   }
 }
@@ -459,17 +523,27 @@ class _PayloadEvidence extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Payload evidence', style: Theme.of(context).textTheme.labelLarge),
+        Text(
+          'Payload evidence',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
         const SizedBox(height: 8),
         Text(
           'Chunks: ${transmission.chunkCount} data + ${transmission.parityCount} parity',
+          style: const TextStyle(fontSize: 12),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
           'Compression: ${transmission.originalByteCount} B to ${transmission.compressedByteCount} B',
+          style: const TextStyle(fontSize: 12),
         ),
-        const SizedBox(height: 6),
-        SelectableText('MGP1: ${transmission.doctorPayload}'),
+        const SizedBox(height: 8),
+        SelectableText(
+          'MGP1: ${transmission.doctorPayload}',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10),
+        ),
       ],
     );
   }
@@ -489,9 +563,12 @@ class _DeliveredPayloadList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (records.isEmpty) {
-      return const _EmptyLine(
-        icon: Icons.inbox_outlined,
-        text: 'No specialist payloads received yet',
+      return const Row(
+        children: [
+          Icon(Icons.inbox_outlined, size: 20),
+          SizedBox(width: 8),
+          Text('No specialist payloads received yet', style: TextStyle(fontSize: 12)),
+        ],
       );
     }
     return Column(
@@ -499,7 +576,9 @@ class _DeliveredPayloadList extends StatelessWidget {
       children: [
         Text(
           'Received payloads',
-          style: Theme.of(context).textTheme.labelLarge,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
         ),
         const SizedBox(height: 8),
         ...records.asMap().entries.map((entry) {
@@ -529,9 +608,7 @@ class _DeliveredPayloadList extends StatelessWidget {
                 record.urgent
                     ? Icons.emergency_rounded
                     : Icons.assignment_turned_in_rounded,
-                color: isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
+                color: isSelected ? Theme.of(context).colorScheme.primary : null,
               ),
               title: Text(
                 patient?.displayName ?? record.summary,
@@ -543,6 +620,7 @@ class _DeliveredPayloadList extends StatelessWidget {
                 '${record.rebuilt ? 'Rebuilt' : 'Partial'} · ${record.payload}',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11),
               ),
             ),
           );
@@ -586,7 +664,10 @@ class _AllPayloadsDialog extends StatelessWidget {
                         Navigator.of(context).pop();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 12,
+                        ),
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
                           color: isSelected
@@ -605,9 +686,7 @@ class _AllPayloadsDialog extends StatelessWidget {
                               record.urgent
                                   ? Icons.emergency_rounded
                                   : Icons.assignment_turned_in_rounded,
-                              color: isSelected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : null,
+                              color: isSelected ? Theme.of(context).colorScheme.primary : null,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -622,13 +701,8 @@ class _AllPayloadsDialog extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${record.rebuilt ? 'Rebuilt' : 'Partial'} · '
-                                    '${record.urgent ? 'Urgent' : 'Routine'}',
-                                  ),
-                                  const SizedBox(height: 4),
-                                  SelectableText(
-                                    record.payload,
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    '${record.rebuilt ? 'Rebuilt' : 'Partial'} · ${record.urgent ? 'Urgent' : 'Routine'}',
+                                    style: const TextStyle(fontSize: 11),
                                   ),
                                 ],
                               ),
@@ -659,14 +733,17 @@ class _PacketQueueList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const _EmptyLine(
-        icon: Icons.playlist_add_check_rounded,
-        text: 'No packets queued',
+      return const Row(
+        children: [
+          Icon(Icons.playlist_add_check_rounded, size: 20),
+          SizedBox(width: 8),
+          Text('No packets queued', style: TextStyle(fontSize: 12)),
+        ],
       );
     }
     return Column(
       children: items
-          .take(5)
+          .take(3)
           .map((item) => _PacketQueueTile(item: item))
           .toList(),
     );
@@ -717,65 +794,28 @@ class _PacketQueueTile extends StatelessWidget {
     final color = item.isUrgent
         ? colorScheme.error
         : paused
-        ? colorScheme.tertiary
-        : active
-        ? colorScheme.primary
-        : colorScheme.secondary;
+            ? colorScheme.tertiary
+            : active
+                ? colorScheme.primary
+                : colorScheme.secondary;
     final icon = item.isUrgent
         ? Icons.emergency_rounded
         : paused
-        ? Icons.pause_circle_filled_rounded
-        : active
-        ? Icons.send_rounded
-        : Icons.schedule_rounded;
+            ? Icons.pause_circle_filled_rounded
+            : active
+                ? Icons.send_rounded
+                : Icons.schedule_rounded;
+
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon, color: color),
-      title: Text(item.summary),
+      title: Text(item.summary, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
       subtitle: Text(
-        '${item.status.toUpperCase()} - ${item.packetCount} packets - '
-        '${item.isUrgent ? 'priority lane' : 'routine lane'}',
+        '${item.status.toUpperCase()} - ${item.packetCount} packets',
+        style: const TextStyle(fontSize: 11),
       ),
-      trailing: Chip(
-        label: Text(item.isUrgent ? 'Urgent' : paused ? 'Paused' : 'Queue'),
-      ),
-    );
-  }
-}
-
-class _ProtocolOverviewDialog extends StatelessWidget {
-  const _ProtocolOverviewDialog({required this.transmission});
-
-  final TransmissionState transmission;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Protocol overview'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Status: ${transmission.status}'),
-          Text(
-            'Chunks: ${transmission.chunkCount} data + ${transmission.parityCount} parity',
-          ),
-          Text(
-            'Changed fields: ${transmission.changedFields.isEmpty ? 'None' : transmission.changedFields.join(', ')}',
-          ),
-          Text(
-            'Recovery: ${transmission.recoveryConfidencePercent}% confidence',
-          ),
-          Text('Proof: ${transmission.proofSummary}'),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-      ],
+      trailing: StatusPill.transport(item.isUrgent ? 'Urgent' : (paused ? 'Paused' : 'Queue')),
     );
   }
 }
@@ -794,43 +834,31 @@ class _IntegrityBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final matched = receipt?.checksumMatch ?? false;
-    final color = urgent
-        ? Theme.of(context).colorScheme.error
+    final severity = urgent
+        ? ClinicalSeverity.critical
         : matched
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.error;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            urgent
-                ? Icons.emergency_rounded
-                : matched
-                ? Icons.verified_rounded
-                : Icons.pending_actions_rounded,
-            color: color,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              urgent
-                  ? 'URGENT — expedited fallback active'
-                  : matched
-                  ? 'Checksum match confirmed'
-                  : rebuilt
+            ? ClinicalSeverity.success
+            : rebuilt
+                ? ClinicalSeverity.caution
+                : ClinicalSeverity.critical;
+
+    return ClinicalAlert(
+      severity: severity,
+      title: urgent
+          ? 'URGENT — expedited fallback active'
+          : matched
+              ? 'Checksum match confirmed'
+              : rebuilt
                   ? 'Awaiting checksum receipt'
                   : 'No verified rebuild yet',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-          ),
-        ],
-      ),
+      body: urgent
+          ? 'Priority telemetry lane triggered. Emergency snapshot fallback active.'
+          : matched
+              ? 'Rebuilt payload matches source checksum verified by receiver.'
+              : rebuilt
+                  ? 'Data payload assembled but FNV-1a check pending.'
+                  : 'Loss exceeds FEC capacity. Reconnection attempt pending.',
+      dismissible: false,
     );
   }
 }
@@ -843,53 +871,38 @@ class _ChangedFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (fields.isEmpty) {
-      return const _EmptyLine(
-        icon: Icons.difference_outlined,
-        text: 'No delta received yet',
+      return const Row(
+        children: [
+          Icon(Icons.difference_outlined, size: 20),
+          SizedBox(width: 8),
+          Text('No delta received yet', style: TextStyle(fontSize: 12)),
+        ],
       );
     }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: fields
-          .map(
-            (field) => Chip(
-              avatar: const Icon(Icons.change_circle_outlined, size: 18),
-              label: Text(field),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(avatar: Icon(icon, size: 18), label: Text('$label: $value'));
-  }
-}
-
-class _EmptyLine extends StatelessWidget {
-  const _EmptyLine({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(text)],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Delta highlights',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: fields
+              .map(
+                (field) => StatusPill(
+                  label: 'Changed: $field',
+                  icon: Icons.change_circle_outlined,
+                  severity: ClinicalSeverity.caution,
+                ),
+              )
+              .toList(),
+        ),
+      ],
     );
   }
 }
