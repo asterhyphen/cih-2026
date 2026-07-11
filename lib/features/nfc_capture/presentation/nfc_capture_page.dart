@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,7 +8,6 @@ import '../../../core/widgets/glass_container.dart';
 import '../../patient_storage/providers/patient_storage_provider.dart';
 import '../../transmission_engine/logic/chunking.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
-import '../logic/patient_image_details.dart';
 import '../providers/nfc_provider.dart';
 import 'nfc_scan_dialog.dart';
 
@@ -498,11 +495,13 @@ class _DiffSummary extends StatelessWidget {
 class _PhotoReferenceField extends StatelessWidget {
   const _PhotoReferenceField({
     required this.value,
+    required this.onSelectImage,
     required this.onUsePlaceholder,
     required this.onClear,
   });
 
   final String value;
+  final VoidCallback onSelectImage;
   final VoidCallback onUsePlaceholder;
   final VoidCallback? onClear;
 
@@ -546,6 +545,12 @@ class _PhotoReferenceField extends StatelessWidget {
                       top: 8,
                       child: Row(
                         children: [
+                          IconButton.filledTonal(
+                            tooltip: 'Select patient image',
+                            onPressed: onSelectImage,
+                            icon: const Icon(Icons.photo_library_rounded),
+                          ),
+                          const SizedBox(width: 6),
                           IconButton.filledTonal(
                             tooltip: 'Use placeholder image',
                             onPressed: onUsePlaceholder,
