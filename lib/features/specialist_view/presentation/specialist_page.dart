@@ -6,6 +6,7 @@ import '../../../core/widgets/animated_page_wrapper.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../../nfc_capture/providers/nfc_provider.dart';
+import '../../transmission_engine/logic/protocol_engine.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../../triage/logic/triage_assessment.dart';
 
@@ -64,6 +65,24 @@ class SpecialistPage extends ConsumerWidget {
                         rebuilt: transmission.rebuilt,
                       ),
                       const SizedBox(height: 12),
+                      if (transmission.priorityFields.isNotEmpty) ...[
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: transmission.priorityFields.take(8).map((field) {
+                            final color = field.priority == ClinicalPriority.critical
+                                ? Theme.of(context).colorScheme.error
+                                : field.priority == ClinicalPriority.high
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.secondary;
+                            return Chip(
+                              avatar: Icon(Icons.local_hospital_rounded, color: color, size: 18),
+                              label: Text('${field.label} · ${field.priority.name}'),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       Text('Received: ${transmission.doctorPayload}'),
                       const SizedBox(height: 12),
                       Wrap(
@@ -102,6 +121,29 @@ class SpecialistPage extends ConsumerWidget {
                       const SizedBox(height: 8),
                       Text('Recommendation: ${assessment.recommendation}'),
                       const SizedBox(height: 16),
+                      Text('Progressive sections', style: Theme.of(context).textTheme.labelLarge),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: transmission.sections.map((section) {
+                          final title = section.name.replaceAll('_', ' ');
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 400),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(title.toUpperCase()),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Queue status', style: Theme.of(context).textTheme.labelLarge),
+                      const SizedBox(height: 8),
+                      ...transmission.queueItems.take(3).map((item) => Text('• ${item.status.toUpperCase()}: ${item.summary}')),
+                      const SizedBox(height: 16),
                       Wrap(
                         spacing: 12,
                         runSpacing: 8,
@@ -113,6 +155,10 @@ class SpecialistPage extends ConsumerWidget {
                           OutlinedButton(
                             onPressed: () => context.go('/network-simulator'),
                             child: const Text('Review network'),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: () {},
+                            child: const Text('Protocol overview'),
                           ),
                         ],
                       ),

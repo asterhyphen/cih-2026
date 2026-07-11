@@ -9,6 +9,18 @@ class PatientModel {
     required this.temperature,
     required this.notes,
     required this.photoRef,
+    this.symptoms = '',
+    this.diagnosis = '',
+    this.medicalHistory = '',
+    this.currentMedication = '',
+    this.allergies = '',
+    this.consciousness = '',
+    this.emergencyNotes = '',
+    this.address = '',
+    this.contactDetails = '',
+    this.insurance = '',
+    this.gender = '',
+    this.bloodGroup = '',
   });
 
   final String id;
@@ -20,6 +32,18 @@ class PatientModel {
   final double temperature;
   final String notes;
   final String photoRef;
+  final String symptoms;
+  final String diagnosis;
+  final String medicalHistory;
+  final String currentMedication;
+  final String allergies;
+  final String consciousness;
+  final String emergencyNotes;
+  final String address;
+  final String contactDetails;
+  final String insurance;
+  final String gender;
+  final String bloodGroup;
 
   static const empty = PatientModel(
     id: '',
@@ -44,6 +68,18 @@ class PatientModel {
       temperature: double.tryParse(data['temp'] ?? '') ?? 0,
       notes: data['notes']?.trim() ?? '',
       photoRef: data['photo']?.trim() ?? '',
+      symptoms: data['symptoms']?.trim() ?? '',
+      diagnosis: data['diagnosis']?.trim() ?? '',
+      medicalHistory: data['medicalHistory']?.trim() ?? '',
+      currentMedication: data['currentMedication']?.trim() ?? '',
+      allergies: data['allergies']?.trim() ?? '',
+      consciousness: data['consciousness']?.trim() ?? '',
+      emergencyNotes: data['emergencyNotes']?.trim() ?? '',
+      address: data['address']?.trim() ?? '',
+      contactDetails: data['contactDetails']?.trim() ?? '',
+      insurance: data['insurance']?.trim() ?? '',
+      gender: data['gender']?.trim() ?? '',
+      bloodGroup: data['bloodGroup']?.trim() ?? '',
     );
   }
 
@@ -69,6 +105,18 @@ class PatientModel {
     'temp': temperature.toStringAsFixed(1),
     'notes': notes,
     'photo': photoRef,
+    'symptoms': symptoms,
+    'diagnosis': diagnosis,
+    'medicalHistory': medicalHistory,
+    'currentMedication': currentMedication,
+    'allergies': allergies,
+    'consciousness': consciousness,
+    'emergencyNotes': emergencyNotes,
+    'address': address,
+    'contactDetails': contactDetails,
+    'insurance': insurance,
+    'gender': gender,
+    'bloodGroup': bloodGroup,
   };
 
   String toPayload() => toWireMap().entries
@@ -94,6 +142,18 @@ class PatientModel {
     double? temperature,
     String? notes,
     String? photoRef,
+    String? symptoms,
+    String? diagnosis,
+    String? medicalHistory,
+    String? currentMedication,
+    String? allergies,
+    String? consciousness,
+    String? emergencyNotes,
+    String? address,
+    String? contactDetails,
+    String? insurance,
+    String? gender,
+    String? bloodGroup,
   }) {
     return PatientModel(
       id: id ?? this.id,
@@ -105,6 +165,18 @@ class PatientModel {
       temperature: temperature ?? this.temperature,
       notes: notes ?? this.notes,
       photoRef: photoRef ?? this.photoRef,
+      symptoms: symptoms ?? this.symptoms,
+      diagnosis: diagnosis ?? this.diagnosis,
+      medicalHistory: medicalHistory ?? this.medicalHistory,
+      currentMedication: currentMedication ?? this.currentMedication,
+      allergies: allergies ?? this.allergies,
+      consciousness: consciousness ?? this.consciousness,
+      emergencyNotes: emergencyNotes ?? this.emergencyNotes,
+      address: address ?? this.address,
+      contactDetails: contactDetails ?? this.contactDetails,
+      insurance: insurance ?? this.insurance,
+      gender: gender ?? this.gender,
+      bloodGroup: bloodGroup ?? this.bloodGroup,
     );
   }
 }

@@ -9,6 +9,7 @@ import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../../nfc_capture/providers/nfc_provider.dart';
 import '../../transmission_engine/logic/adaptive_transmission.dart';
 import '../../transmission_engine/logic/chunking.dart';
+import '../../transmission_engine/logic/protocol_engine.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../../triage/logic/triage_assessment.dart';
 
@@ -22,6 +23,8 @@ class HomePage extends ConsumerWidget {
     final networkState = ref.watch(networkSimulatorProvider);
     final patient = captureState.patient;
     final chunks = chunkText(captureState.payload, 8);
+    final clinicalPlan = patient == null ? null : buildClinicalTransmissionPlan(patient);
+    final validationIssues = patient == null ? const <ValidationIssue>[] : validateClinicalValues(patient);
     final assessment = evaluateTriage(
       payload: captureState.payload,
       reliability: networkState.reliability,
@@ -106,6 +109,40 @@ class HomePage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       Text('Proof: ${transmissionState.proofSummary}'),
+                      const SizedBox(height: 8),
+                      if (clinicalPlan != null) ...[
+                        Text(
+                          'Priority stream',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: clinicalPlan.priorityFields.take(6).map((field) {
+                            final color = field.priority == ClinicalPriority.critical
+                                ? Theme.of(context).colorScheme.error
+                                : field.priority == ClinicalPriority.high
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.secondary;
+                            return Chip(
+                              avatar: Icon(Icons.priority_high_rounded, color: color, size: 18),
+                              label: Text('${field.label} · ${field.priority.name}'),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      if (validationIssues.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Validation alerts',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 4),
+                        ...validationIssues.map(
+                          (issue) => Text('• ${issue.message}'),
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         'Triage score: ${assessment.score}/100 - '

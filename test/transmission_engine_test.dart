@@ -2,6 +2,7 @@ import 'package:cih/features/data/patient_model.dart';
 import 'package:cih/features/transmission_engine/logic/chunking.dart';
 import 'package:cih/features/transmission_engine/logic/delta_encoder.dart';
 import 'package:cih/features/transmission_engine/logic/priority_queue.dart';
+import 'package:cih/features/transmission_engine/logic/protocol_engine.dart';
 import 'package:cih/features/transmission_engine/logic/secure_transmission.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -104,5 +105,51 @@ void main() {
         expect(result.firstPayloadLabel, 'urgent vitals');
       },
     );
+
+    test('prioritizes critical clinical fields ahead of lower-risk fields', () {
+      final patient = PatientModel(
+        id: 'P3',
+        displayName: 'Katherine Johnson',
+        age: 40,
+        bloodPressure: '120/80',
+        heartRate: 88,
+        oxygenSaturation: 97,
+        temperature: 37.1,
+        notes: 'Needs review',
+        photoRef: 'xray-2',
+        symptoms: 'Chest tightness',
+        diagnosis: 'Monitoring',
+        medicalHistory: 'Asthma',
+        allergies: 'Penicillin',
+        emergencyNotes: 'Rapid onset',
+        address: '4 Observatory Lane',
+      );
+
+      final plan = buildClinicalTransmissionPlan(patient);
+
+      expect(plan.priorityFields.first.priority, ClinicalPriority.critical);
+      expect(plan.priorityFields.first.key, 'heartRate');
+      expect(plan.priorityFields.last.priority, ClinicalPriority.low);
+      expect(plan.sections.first, TransmissionSection.vitals);
+    });
+
+    test('flags implausible clinical values locally', () {
+      final patient = PatientModel(
+        id: 'P4',
+        displayName: 'Alan Turing',
+        age: 41,
+        bloodPressure: '-10/40',
+        heartRate: 260,
+        oxygenSaturation: 101,
+        temperature: 29,
+        notes: 'Urgent',
+        photoRef: '',
+      );
+
+      final issues = validateClinicalValues(patient);
+
+      expect(issues, isNotEmpty);
+      expect(issues.any((issue) => issue.message.contains('Heart Rate')), isTrue);
+    });
   });
 }

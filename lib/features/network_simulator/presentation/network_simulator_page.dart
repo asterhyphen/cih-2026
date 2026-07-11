@@ -86,6 +86,18 @@ class NetworkSimulatorPage extends ConsumerWidget {
                           _InfoPill(label: 'Mode', value: state.mode),
                           _InfoPill(label: 'Risk', value: state.deliveryImpact),
                           _InfoPill(label: 'Signal', value: state.qualityLabel),
+                          _InfoPill(label: 'Strategy', value: state.activeStrategy),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _ProfileChip(label: 'Ultra Low', value: 'Ultra Low'),
+                          _ProfileChip(label: 'Low', value: 'Low'),
+                          _ProfileChip(label: 'Medium', value: 'Medium'),
+                          _ProfileChip(label: 'High', value: 'High'),
                         ],
                       ),
                       SwitchListTile(
@@ -147,6 +159,15 @@ class NetworkSimulatorPage extends ConsumerWidget {
                           medGateOk: transmission.rebuilt,
                           naiveOk: transmission.normalAppStatus == 'Delivered',
                         ),
+                      const SizedBox(height: 12),
+                      Text('Bandwidth Budget: ${transmission.bandwidthBudget} kbps'),
+                      Text('Current Usage: ${transmission.currentUsage} kbps'),
+                      Text('Remaining Budget: ${transmission.remainingBudget} kbps'),
+                      Text('Compression Ratio: ${transmission.compressionRatio.toStringAsFixed(2)}x'),
+                      Text('Packet Loss: ${transmission.packetLoss}%'),
+                      Text('Latency: ${transmission.latency} ms'),
+                      Text('Recovery %: ${transmission.recoveryPercent}%'),
+                      Text('Estimated Delivery Time: ${transmission.estimatedDeliveryTime} ms'),
                       const SizedBox(height: 12),
                       Text(transmission.proofSummary),
                       const SizedBox(height: 12),
@@ -349,6 +370,25 @@ class _InfoPill extends StatelessWidget {
     return Chip(
       avatar: const Icon(Icons.network_check_rounded, size: 18),
       label: Text('$label: $value'),
+    );
+  }
+}
+
+class _ProfileChip extends StatelessWidget {
+  const _ProfileChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isActive = ref.watch(networkSimulatorProvider).profileLabel == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isActive,
+      onSelected: (_) {
+        ref.read(networkSimulatorProvider.notifier).setProfile(value);
+      },
     );
   }
 }

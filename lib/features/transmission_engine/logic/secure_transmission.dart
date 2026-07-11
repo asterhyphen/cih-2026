@@ -6,6 +6,7 @@ import '../../data/patient_model.dart';
 import 'chunking.dart';
 import 'delta_encoder.dart';
 import 'priority_queue.dart';
+import 'protocol_engine.dart';
 
 class SecureTransmissionResult {
   const SecureTransmissionResult({
@@ -50,14 +51,31 @@ SecureTransmissionResult simulateSecureTransmission({
   required Map<String, String>? previousRecord,
   required int reliability,
   int sparePieces = 3,
+  int chunkSize = 18,
 }) {
   final delta = encodeDelta(patient.toWireMap(), previousRecord);
+  final plan = buildClinicalTransmissionPlan(patient);
+  final clinicalPayloads = plan.priorityFields
+      .map(
+        (field) => QueuedPayload(
+          label: field.label,
+          payload: _encrypted('${field.priority.name}:${field.value}'),
+          priority: switch (field.priority) {
+            ClinicalPriority.critical => TransmissionPriority.urgent,
+            ClinicalPriority.high => TransmissionPriority.urgent,
+            ClinicalPriority.medium => TransmissionPriority.routine,
+            ClinicalPriority.low => TransmissionPriority.media,
+          },
+        ),
+      )
+      .toList();
   final queue = prioritizePayloads([
     QueuedPayload(
       label: 'urgent vitals',
       payload: _encrypted(delta.payload),
       priority: TransmissionPriority.urgent,
     ),
+    ...clinicalPayloads,
     QueuedPayload(
       label: 'clinical note',
       payload: _encrypted(patient.notes),
@@ -72,7 +90,7 @@ SecureTransmissionResult simulateSecureTransmission({
   final payload = queue
       .map((item) => '${item.label}:${item.payload}')
       .join(';');
-  final chunks = buildProtectedChunks(payload, sparePieces: sparePieces);
+  final chunks = buildProtectedChunks(payload, chunkSize: chunkSize, sparePieces: sparePieces);
   final lossRate = ((100 - reliability) / 100).clamp(0.0, 0.9);
   final lostPieces = (chunks.length * lossRate).ceil();
   final dataChunks = chunks.where((chunk) => !chunk.parity).length;
