@@ -16,6 +16,8 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>cih</string>
+	<key>NFCReaderUsageDescription</key>
+	<string>Read patient ID cards to load clinical records without retyping.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

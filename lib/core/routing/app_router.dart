@@ -11,52 +11,73 @@ import '../../features/onboarding/presentation/onboarding_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/specialist_view/presentation/specialist_page.dart';
 
+class AppRoutes {
+  static const login = '/login';
+  static const register = '/register';
+  static const onboarding = '/onboarding';
+  static const home = '/home';
+  static const nfcCapture = '/nfc-capture';
+  static const networkSimulator = '/network-simulator';
+  static const specialist = '/specialist';
+  static const settings = '/settings';
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final isAuthenticated = ref.watch(authProvider);
+  final isAuthenticated = ref.watch(authProvider).isAuthenticated;
 
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: AppRoutes.login,
     redirect: (context, state) {
       final path = state.matchedLocation;
       final isPublicRoute =
-          path == '/login' || path == '/register' || path == '/onboarding';
+          path == AppRoutes.login ||
+          path == AppRoutes.register ||
+          path == AppRoutes.onboarding;
 
       if (!isAuthenticated && !isPublicRoute) {
-        return '/login';
+        return AppRoutes.login;
       }
 
       if (isAuthenticated &&
-          (path == '/login' || path == '/register' || path == '/onboarding')) {
-        return '/home';
+          (path == AppRoutes.login ||
+              path == AppRoutes.register ||
+              path == AppRoutes.onboarding)) {
+        return AppRoutes.home;
       }
 
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
-        path: '/register',
+        path: AppRoutes.login,
+        builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.register,
         builder: (context, state) => const RegisterPage(),
       ),
       GoRoute(
-        path: '/onboarding',
+        path: AppRoutes.onboarding,
         builder: (context, state) => const OnboardingPage(),
       ),
-      GoRoute(path: '/home', builder: (context, state) => const HomePage()),
       GoRoute(
-        path: '/nfc-capture',
+        path: AppRoutes.home,
+        builder: (context, state) => const HomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.nfcCapture,
         builder: (context, state) => const NfcCapturePage(),
       ),
       GoRoute(
-        path: '/network-simulator',
+        path: AppRoutes.networkSimulator,
         builder: (context, state) => const NetworkSimulatorPage(),
       ),
       GoRoute(
-        path: '/specialist',
+        path: AppRoutes.specialist,
         builder: (context, state) => const SpecialistPage(),
       ),
       GoRoute(
-        path: '/settings',
+        path: AppRoutes.settings,
         builder: (context, state) => const SettingsPage(),
       ),
     ],

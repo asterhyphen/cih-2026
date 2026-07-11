@@ -22,6 +22,11 @@ class FloatingNavBar extends StatelessWidget {
         label: 'Network',
       ),
       _NavItem(
+        path: '/specialist',
+        icon: LucideIcons.stethoscope,
+        label: 'Specialist',
+      ),
+      _NavItem(
         path: '/settings',
         icon: LucideIcons.settings,
         label: 'Settings',

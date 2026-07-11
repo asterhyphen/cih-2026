@@ -24,7 +24,9 @@ class OnboardingPage extends StatelessWidget {
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 16),
-                    const Text('Onboarding placeholder screen.'),
+                    const Text(
+                      'Scan a patient card, verify vitals, tune the network sliders, then open the doctor console to confirm the rebuilt record.',
+                    ),
                     const SizedBox(height: 20),
                     FilledButton(
                       onPressed: () => context.go('/home'),
