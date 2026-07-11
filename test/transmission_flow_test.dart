@@ -100,4 +100,48 @@ void main() {
       expect(state.normalAppStatus, isNot('Delivered'));
     },
   );
+
+  test('urgent packets preempt a routine packet in the visible queue', () async {
+    final container = await _containerWithFreshStore('medgate-priority-queue');
+    container.read(networkSimulatorProvider.notifier).setLatency(1200);
+    final controller = container.read(transmissionProvider.notifier);
+
+    final routineFuture = controller.sendPatientRecord(
+      patient: const PatientModel(
+        id: 'P10',
+        displayName: 'Routine Patient',
+        age: 45,
+        bloodPressure: '120/80',
+        heartRate: 76,
+        oxygenSaturation: 98,
+        temperature: 36.7,
+        notes: 'Routine update',
+        photoRef: '',
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    await controller.sendPatientRecord(
+      patient: const PatientModel(
+        id: 'P11',
+        displayName: 'Urgent Patient',
+        age: 52,
+        bloodPressure: '85/53',
+        heartRate: 132,
+        oxygenSaturation: 91,
+        temperature: 38.4,
+        notes: 'Shock risk',
+        photoRef: '',
+        urgent: true,
+      ),
+    );
+    await routineFuture;
+
+    final state = container.read(transmissionProvider);
+    expect(state.queueItems.first.isUrgent, isTrue);
+    expect(state.queueItems.where((item) => item.status == 'delivered'), hasLength(2));
+    expect(
+      state.logs.any((log) => log.contains('Paused routine packet P10')),
+      isTrue,
+    );
+  });
 }

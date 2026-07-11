@@ -149,7 +149,10 @@ void main() {
       final issues = validateClinicalValues(patient);
 
       expect(issues, isNotEmpty);
-      expect(issues.any((issue) => issue.message.contains('Heart Rate')), isTrue);
+      expect(
+        issues.any((issue) => issue.message.contains('Heart Rate')),
+        isTrue,
+      );
     });
 
     test('round-trips compressed payloads through encryption and recovery', () {
@@ -205,41 +208,71 @@ void main() {
       );
 
       expect(urgent.fallbackTriggered, isTrue);
-      expect(urgent.fallbackTriggerAttempt, lessThan(routine.fallbackTriggerAttempt));
+      expect(
+        urgent.fallbackTriggerAttempt,
+        lessThan(routine.fallbackTriggerAttempt),
+      );
       expect(routine.fallbackTriggered, isFalse);
     });
 
-    test('urgent fallback keeps the smallest image tier while routine fallback drops it', () {
+    test(
+      'urgent fallback keeps the smallest image tier while routine fallback drops it',
+      () {
+        final patient = PatientModel(
+          id: 'P6',
+          displayName: 'Mary Anning',
+          age: 72,
+          bloodPressure: '122/78',
+          heartRate: 88,
+          oxygenSaturation: 96,
+          temperature: 37.0,
+          notes: 'Urgent review',
+          photoRef: 'thumb-2',
+          urgent: true,
+        );
+
+        final urgent = simulateSecureTransmission(
+          patient: patient,
+          previousRecord: null,
+          reliability: 40,
+          urgent: true,
+          retryAttempt: 0,
+        );
+        final routine = simulateSecureTransmission(
+          patient: patient.copyWith(urgent: false),
+          previousRecord: null,
+          reliability: 40,
+          urgent: false,
+          retryAttempt: 2,
+        );
+
+        expect(urgent.fallbackImageTier, 'tiny-blurred-thumbnail');
+        expect(routine.fallbackImageTier, isEmpty);
+      },
+    );
+
+    test('manual urgent cases send the emergency flag first', () {
       final patient = PatientModel(
-        id: 'P6',
-        displayName: 'Mary Anning',
-        age: 72,
-        bloodPressure: '122/78',
-        heartRate: 88,
-        oxygenSaturation: 96,
-        temperature: 37.0,
-        notes: 'Urgent review',
-        photoRef: 'thumb-2',
+        id: 'P7',
+        displayName: 'Ada Lovelace',
+        age: 36,
+        bloodPressure: '85/53',
+        heartRate: 132,
+        oxygenSaturation: 91,
+        temperature: 38.4,
+        notes: 'Shock risk',
+        photoRef: '',
         urgent: true,
       );
 
-      final urgent = simulateSecureTransmission(
+      final result = simulateSecureTransmission(
         patient: patient,
         previousRecord: null,
-        reliability: 40,
+        reliability: 70,
         urgent: true,
-        retryAttempt: 0,
-      );
-      final routine = simulateSecureTransmission(
-        patient: patient.copyWith(urgent: false),
-        previousRecord: null,
-        reliability: 40,
-        urgent: false,
-        retryAttempt: 2,
       );
 
-      expect(urgent.fallbackImageTier, 'tiny-blurred-thumbnail');
-      expect(routine.fallbackImageTier, isEmpty);
+      expect(result.firstPayloadLabel, 'manual urgent flag');
     });
   });
 }

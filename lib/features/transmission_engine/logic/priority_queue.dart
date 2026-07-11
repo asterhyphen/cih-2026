@@ -1,4 +1,5 @@
 enum TransmissionPriority {
+  emergency(-1),
   urgent(0),
   routine(1),
   media(2);

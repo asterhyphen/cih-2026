@@ -85,22 +85,30 @@ SecureTransmissionResult simulateSecureTransmission({
       )
       .toList();
   final queue = prioritizePayloads([
+    if (urgent || patient.urgent)
+      QueuedPayload(
+        label: 'manual urgent flag',
+        payload: _encrypted(buildEmergencySnapshot(patient)),
+        priority: TransmissionPriority.emergency,
+      ),
     QueuedPayload(
       label: 'urgent vitals',
       payload: _encrypted(delta.payload),
       priority: TransmissionPriority.urgent,
     ),
     ...clinicalPayloads,
-    QueuedPayload(
-      label: 'clinical note',
-      payload: _encrypted(patient.notes),
-      priority: TransmissionPriority.routine,
-    ),
-    QueuedPayload(
-      label: 'photo reference',
-      payload: _encrypted(patient.photoRef),
-      priority: TransmissionPriority.media,
-    ),
+    if (patient.notes.trim().isNotEmpty)
+      QueuedPayload(
+        label: 'clinical note',
+        payload: _encrypted(patient.notes),
+        priority: TransmissionPriority.routine,
+      ),
+    if (patient.photoRef.trim().isNotEmpty)
+      QueuedPayload(
+        label: 'photo reference',
+        payload: _encrypted(patient.photoRef),
+        priority: TransmissionPriority.media,
+      ),
   ]);
   final basePayload = queue
       .map((item) => '${item.label}:${item.payload}')
@@ -109,7 +117,11 @@ SecureTransmissionResult simulateSecureTransmission({
   // ciphertext does not remain as raw, incompressible noise.
   final compressedPayload = _compressPayload(basePayload);
   final encryptedPayload = _encrypted(compressedPayload);
-  final chunks = buildProtectedChunks(encryptedPayload, chunkSize: chunkSize, sparePieces: sparePieces);
+  final chunks = buildProtectedChunks(
+    encryptedPayload,
+    chunkSize: chunkSize,
+    sparePieces: sparePieces,
+  );
   final lossRate = ((100 - reliability) / 100).clamp(0.0, 0.9);
   final lostPieces = (chunks.length * lossRate).ceil();
   final dataChunks = chunks.where((chunk) => !chunk.parity).length;
@@ -120,7 +132,9 @@ SecureTransmissionResult simulateSecureTransmission({
   final sourceChecksum = _checksum(delta.payload);
   final fallbackTriggered = urgent || (retryAttempt >= 3 && reliability < 60);
   final fallbackTriggerAttempt = urgent ? 0 : (retryAttempt + 1).clamp(0, 4);
-  final fallbackImageTier = urgent && fallbackTriggered ? 'tiny-blurred-thumbnail' : '';
+  final fallbackImageTier = urgent && fallbackTriggered
+      ? 'tiny-blurred-thumbnail'
+      : '';
   final rebuiltChecksum = rebuilt
       ? sourceChecksum
       : _checksum('partial:$basePayload');
@@ -210,7 +224,8 @@ String decryptAndDecompressPayload(String payload) {
   }
   final iv = IV.fromBase64(parts.first);
   final ciphertext = parts.sublist(1).join(':');
-  final decrypted = Encrypter(AES(Key.fromUtf8('0123456789abcdef0123456789abcdef')))
-      .decrypt(Encrypted.fromBase64(ciphertext), iv: iv);
+  final decrypted = Encrypter(
+    AES(Key.fromUtf8('0123456789abcdef0123456789abcdef')),
+  ).decrypt(Encrypted.fromBase64(ciphertext), iv: iv);
   return _decryptPayload(decrypted);
 }

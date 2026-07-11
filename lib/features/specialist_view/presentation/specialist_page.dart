@@ -147,6 +147,10 @@ class SpecialistPage extends ConsumerWidget {
                       const SizedBox(height: 12),
                       _PayloadEvidence(transmission: transmission),
                       const SizedBox(height: 12),
+                      _DeliveredPayloadList(
+                        records: transmission.doctorPayloads,
+                      ),
+                      const SizedBox(height: 12),
                       Text(
                         'Triage severity: ${assessment.severity.toUpperCase()}',
                       ),
@@ -187,6 +191,8 @@ class SpecialistPage extends ConsumerWidget {
                         style: Theme.of(context).textTheme.labelLarge,
                       ),
                       const SizedBox(height: 8),
+                      _PacketQueueList(items: transmission.queueItems),
+                      const SizedBox(height: 8),
                       ...transmission.queueItems
                           .take(3)
                           .map(
@@ -207,6 +213,24 @@ class SpecialistPage extends ConsumerWidget {
                             onPressed: () =>
                                 context.go(AppRoutes.networkSimulator),
                             child: const Text('Review network'),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: () => showDialog<void>(
+                              context: context,
+                              builder: (context) => _PacketQueueDialog(
+                                items: transmission.queueItems,
+                              ),
+                            ),
+                            child: const Text('Packet queue'),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: () => showDialog<void>(
+                              context: context,
+                              builder: (context) => _AllPayloadsDialog(
+                                records: transmission.doctorPayloads,
+                              ),
+                            ),
+                            child: const Text('All payloads'),
                           ),
                           FilledButton.tonal(
                             onPressed: () => showDialog<void>(
@@ -390,6 +414,197 @@ class _PayloadEvidence extends StatelessWidget {
         const SizedBox(height: 6),
         SelectableText('MGP1: ${transmission.doctorPayload}'),
       ],
+    );
+  }
+}
+
+class _DeliveredPayloadList extends StatelessWidget {
+  const _DeliveredPayloadList({required this.records});
+
+  final List<DoctorPayloadRecord> records;
+
+  @override
+  Widget build(BuildContext context) {
+    if (records.isEmpty) {
+      return const _EmptyLine(
+        icon: Icons.inbox_outlined,
+        text: 'No specialist payloads received yet',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Received payloads',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: 8),
+        ...records.take(4).map((record) {
+          final patient = _tryDecodePatient(record.payload);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                record.urgent
+                    ? Icons.emergency_rounded
+                    : Icons.assignment_turned_in_rounded,
+              ),
+              title: Text(patient?.displayName ?? record.summary),
+              subtitle: Text(
+                '${record.rebuilt ? 'Rebuilt' : 'Partial'} · ${record.payload}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _AllPayloadsDialog extends StatelessWidget {
+  const _AllPayloadsDialog({required this.records});
+
+  final List<DoctorPayloadRecord> records;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('All payloads'),
+      content: SizedBox(
+        width: 560,
+        child: records.isEmpty
+            ? const Text('No specialist payloads received yet')
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: records.map((record) {
+                    final patient = _tryDecodePatient(record.payload);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            patient?.displayName ?? record.summary,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${record.rebuilt ? 'Rebuilt' : 'Partial'} · '
+                            '${record.urgent ? 'Urgent' : 'Routine'}',
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(record.payload),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PacketQueueList extends StatelessWidget {
+  const _PacketQueueList({required this.items});
+
+  final List<TransmissionQueueItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const _EmptyLine(
+        icon: Icons.playlist_add_check_rounded,
+        text: 'No packets queued',
+      );
+    }
+    return Column(
+      children: items
+          .take(5)
+          .map((item) => _PacketQueueTile(item: item))
+          .toList(),
+    );
+  }
+}
+
+class _PacketQueueDialog extends StatelessWidget {
+  const _PacketQueueDialog({required this.items});
+
+  final List<TransmissionQueueItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Packet queue'),
+      content: SizedBox(
+        width: 560,
+        child: items.isEmpty
+            ? const Text('No packets queued')
+            : SingleChildScrollView(
+                child: Column(
+                  children: items
+                      .map((item) => _PacketQueueTile(item: item))
+                      .toList(),
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PacketQueueTile extends StatelessWidget {
+  const _PacketQueueTile({required this.item});
+
+  final TransmissionQueueItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final paused = item.status == 'paused';
+    final active = item.status == 'sending';
+    final color = item.isUrgent
+        ? colorScheme.error
+        : paused
+        ? colorScheme.tertiary
+        : active
+        ? colorScheme.primary
+        : colorScheme.secondary;
+    final icon = item.isUrgent
+        ? Icons.emergency_rounded
+        : paused
+        ? Icons.pause_circle_filled_rounded
+        : active
+        ? Icons.send_rounded
+        : Icons.schedule_rounded;
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: color),
+      title: Text(item.summary),
+      subtitle: Text(
+        '${item.status.toUpperCase()} - ${item.packetCount} packets - '
+        '${item.isUrgent ? 'priority lane' : 'routine lane'}',
+      ),
+      trailing: Chip(
+        label: Text(item.isUrgent ? 'Urgent' : paused ? 'Paused' : 'Queue'),
+      ),
     );
   }
 }

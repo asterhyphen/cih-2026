@@ -91,6 +91,18 @@ class TransmissionQueueItem {
   }
 }
 
+class _QueuedPatientTransmission {
+  const _QueuedPatientTransmission({
+    required this.id,
+    required this.patient,
+    required this.sparePieces,
+  });
+
+  final String id;
+  final PatientModel patient;
+  final int sparePieces;
+}
+
 class TransmissionTimelineEvent {
   const TransmissionTimelineEvent({
     required this.label,
@@ -101,6 +113,22 @@ class TransmissionTimelineEvent {
   final String label;
   final String status;
   final DateTime timestamp;
+}
+
+class DoctorPayloadRecord {
+  const DoctorPayloadRecord({
+    required this.payload,
+    required this.timestamp,
+    required this.rebuilt,
+    required this.urgent,
+    required this.summary,
+  });
+
+  final String payload;
+  final DateTime timestamp;
+  final bool rebuilt;
+  final bool urgent;
+  final String summary;
 }
 
 class TransmissionState {
@@ -119,6 +147,7 @@ class TransmissionState {
     this.rebuilt = false,
     this.normalAppStatus = 'Waiting',
     this.doctorPayload = 'No patient data received yet',
+    this.doctorPayloads = const <DoctorPayloadRecord>[],
     this.changedFields = const <String>[],
     this.chunkCount = 0,
     this.parityCount = 0,
@@ -170,6 +199,7 @@ class TransmissionState {
   final bool rebuilt;
   final String normalAppStatus;
   final String doctorPayload;
+  final List<DoctorPayloadRecord> doctorPayloads;
   final List<String> changedFields;
   final int chunkCount;
   final int parityCount;
@@ -221,6 +251,7 @@ class TransmissionState {
     bool? rebuilt,
     String? normalAppStatus,
     String? doctorPayload,
+    List<DoctorPayloadRecord>? doctorPayloads,
     List<String>? changedFields,
     int? chunkCount,
     int? parityCount,
@@ -272,6 +303,7 @@ class TransmissionState {
       rebuilt: rebuilt ?? this.rebuilt,
       normalAppStatus: normalAppStatus ?? this.normalAppStatus,
       doctorPayload: doctorPayload ?? this.doctorPayload,
+      doctorPayloads: doctorPayloads ?? this.doctorPayloads,
       changedFields: changedFields ?? this.changedFields,
       chunkCount: chunkCount ?? this.chunkCount,
       parityCount: parityCount ?? this.parityCount,
@@ -317,6 +349,10 @@ class TransmissionState {
 
 class TransmissionController extends Notifier<TransmissionState> {
   int _queueCounter = 0;
+  final List<_QueuedPatientTransmission> _pendingPatients = [];
+  bool _processingQueue = false;
+  bool _preemptRequested = false;
+  _QueuedPatientTransmission? _activeTransmission;
 
   @override
   TransmissionState build() => const TransmissionState();
@@ -362,6 +398,71 @@ class TransmissionController extends Notifier<TransmissionState> {
       return;
     }
 
+    final item = _QueuedPatientTransmission(
+      id: 'queue-${_queueCounter++}',
+      patient: patient,
+      sparePieces: sparePieces,
+    );
+    _pendingPatients.add(item);
+    state = state.copyWith(
+      status: _processingQueue ? state.status : 'queued',
+      message: patient.urgent
+          ? 'Urgent packet queued for priority send'
+          : 'Patient packet queued',
+      queueItems: _prioritizedQueueItems([
+        TransmissionQueueItem(
+          id: item.id,
+          status: patient.urgent ? 'priority queued' : 'queued',
+          summary: patient.urgent
+              ? 'URGENT priority packet waiting ${patient.displayName}'
+              : 'Queued packet waiting ${patient.displayName}',
+          packetCount: 0,
+          retryCount: 0,
+          createdAt: DateTime.now(),
+          payload: patient.toPayload(),
+          isUrgent: patient.urgent,
+        ),
+        ...state.queueItems,
+      ]),
+      logs: [
+        if (patient.urgent)
+          'URGENT packet queued; routine packet will pause if active.',
+        ...state.logs,
+      ],
+    );
+
+    final active = _activeTransmission;
+    if (_processingQueue && patient.urgent && active?.patient.urgent == false) {
+      _preemptRequested = true;
+    }
+
+    if (_processingQueue) {
+      return;
+    }
+
+    _processingQueue = true;
+    try {
+      while (_pendingPatients.isNotEmpty) {
+        _pendingPatients.sort(_compareQueuedPatients);
+        final next = _pendingPatients.removeAt(0);
+        _activeTransmission = next;
+        final completed = await _transmitQueuedPatient(next);
+        _activeTransmission = null;
+        if (!completed) {
+          _pendingPatients.add(next);
+        }
+      }
+    } finally {
+      _processingQueue = false;
+      _preemptRequested = false;
+      _activeTransmission = null;
+    }
+  }
+
+  Future<bool> _transmitQueuedPatient(_QueuedPatientTransmission queued) async {
+    final patient = queued.patient;
+    final sparePieces = queued.sparePieces;
+
     final storage = ref.read(patientStorageProvider.notifier);
     Map<String, String>? previousRecord;
     try {
@@ -375,16 +476,18 @@ class TransmissionController extends Notifier<TransmissionState> {
         logs: ['Storage error: $error', ...state.logs],
         proofSummary: 'Transmission not started; local baseline unavailable',
       );
-      return;
+      return true;
     }
 
     final initialNetwork = ref.read(networkSimulatorProvider);
+    final urgentSparePieces = patient.urgent ? sparePieces + 2 : sparePieces;
     final initialResult = simulateSecureTransmission(
       patient: patient,
       previousRecord: previousRecord,
       reliability: initialNetwork.reliability,
-      sparePieces: sparePieces + initialNetwork.redundancy,
+      sparePieces: urgentSparePieces + initialNetwork.redundancy,
       chunkSize: initialNetwork.chunkSize,
+      urgent: patient.urgent,
     );
     if (!initialResult.delta.hasDelta) {
       state = state.copyWith(
@@ -394,14 +497,14 @@ class TransmissionController extends Notifier<TransmissionState> {
         logs: ['Duplicate record skipped.', ...state.logs],
         proofSummary: 'No changed fields; duplicate buffered',
       );
-      return;
+      return true;
     }
 
     final plan = buildClinicalTransmissionPlan(patient);
     final validationIssues = validateClinicalValues(patient);
     final emergencySnapshot = buildEmergencySnapshot(patient);
     final queueEntry = TransmissionQueueItem(
-      id: 'queue-${_queueCounter++}',
+      id: queued.id,
       status: 'sending',
       summary: patient.urgent
           ? 'URGENT MedGate Protocol transmitting ${patient.displayName}'
@@ -421,7 +524,7 @@ class TransmissionController extends Notifier<TransmissionState> {
       sections: plan.sections,
       validationIssues: validationIssues,
       emergencySnapshot: emergencySnapshot,
-      queueItems: [queueEntry, ...state.queueItems],
+      queueItems: _upsertQueueItem(state.queueItems, queueEntry),
       activeStrategy: initialNetwork.activeStrategy,
       chunkSize: initialNetwork.chunkSize,
       compressionLevel: initialNetwork.compressionLevel,
@@ -450,6 +553,28 @@ class TransmissionController extends Notifier<TransmissionState> {
     final retransmittedChunkIds = <String>[];
 
     for (var step = 20; step <= 100; step += 20) {
+      if (_preemptRequested && !patient.urgent) {
+        _preemptRequested = false;
+        state = state.copyWith(
+          status: 'paused',
+          progress: step - 20,
+          message: 'Routine packet paused for urgent priority packet',
+          queueItems: _upsertQueueItem(
+            state.queueItems,
+            queueEntry.copyWith(
+              status: 'paused',
+              summary:
+                  'Paused ${patient.displayName}; urgent packet moved first',
+              isUrgent: false,
+            ),
+          ),
+          logs: [
+            'Paused routine packet ${patient.id}; urgent packet moved first.',
+            ...state.logs,
+          ],
+        );
+        return false;
+      }
       final liveNetwork = ref.read(networkSimulatorProvider);
       reliability = liveNetwork.reliability;
       latencyMs = liveNetwork.latencyMs;
@@ -465,7 +590,7 @@ class TransmissionController extends Notifier<TransmissionState> {
         patient: patient,
         previousRecord: previousRecord,
         reliability: reliability,
-        sparePieces: sparePieces + liveNetwork.redundancy,
+        sparePieces: urgentSparePieces + liveNetwork.redundancy,
         chunkSize: liveNetwork.chunkSize,
         urgent: patient.urgent,
         retryAttempt: step ~/ 20,
@@ -509,10 +634,12 @@ class TransmissionController extends Notifier<TransmissionState> {
         logs: state.logs,
         receipts: state.receipts,
         doctorPayload: state.doctorPayload,
+        doctorPayloads: state.doctorPayloads,
         plan: plan,
         validationIssues: validationIssues,
         emergencySnapshot: emergencySnapshot,
-        queueItems: [
+        queueItems: _upsertQueueItem(
+          state.queueItems,
           queueEntry.copyWith(
             status: step < 100
                 ? 'sending'
@@ -521,8 +648,7 @@ class TransmissionController extends Notifier<TransmissionState> {
                 : 'failed',
             isUrgent: patient.urgent,
           ),
-          ...state.queueItems.where((item) => item.id != queueEntry.id),
-        ],
+        ),
         timeline: _timelineFromStep(step, result),
         bandwidthBudget: initialNetwork.bandwidthKbps,
         currentUsage: ((step / 100) * initialNetwork.bandwidthKbps).round(),
@@ -594,17 +720,29 @@ class TransmissionController extends Notifier<TransmissionState> {
       ],
       receipts: [receipt, ...state.receipts],
       doctorPayload: result.rebuilt ? patient.toPayload() : state.doctorPayload,
+      doctorPayloads: [
+        DoctorPayloadRecord(
+          payload: result.rebuilt ? patient.toPayload() : result.delta.payload,
+          timestamp: DateTime.now(),
+          rebuilt: result.rebuilt,
+          urgent: patient.urgent,
+          summary: result.rebuilt
+              ? 'Rebuilt ${patient.displayName}'
+              : 'Partial ${patient.displayName}',
+        ),
+        ...state.doctorPayloads,
+      ],
       plan: plan,
       validationIssues: validationIssues,
       emergencySnapshot: emergencySnapshot,
-      queueItems: [
+      queueItems: _upsertQueueItem(
+        state.queueItems,
         queueEntry.copyWith(
           status: result.rebuilt ? 'delivered' : 'failed',
           summary: result.rebuilt ? 'Delivered' : 'Queued for retry',
           isUrgent: patient.urgent,
         ),
-        ...state.queueItems.where((item) => item.id != queueEntry.id),
-      ],
+      ),
       timeline: [
         ...state.timeline,
         TransmissionTimelineEvent(
@@ -639,6 +777,7 @@ class TransmissionController extends Notifier<TransmissionState> {
       fallbackTriggerAttempt: result.fallbackTriggerAttempt,
       fallbackImageTier: result.fallbackImageTier,
     );
+    return true;
   }
 
   Future<void> retryQueueItem({
@@ -677,6 +816,39 @@ class TransmissionController extends Notifier<TransmissionState> {
     );
   }
 
+  int _compareQueuedPatients(
+    _QueuedPatientTransmission a,
+    _QueuedPatientTransmission b,
+  ) {
+    if (a.patient.urgent != b.patient.urgent) {
+      return a.patient.urgent ? -1 : 1;
+    }
+    return a.id.compareTo(b.id);
+  }
+
+  List<TransmissionQueueItem> _prioritizedQueueItems(
+    List<TransmissionQueueItem> items,
+  ) {
+    final sorted = items.toList()
+      ..sort((a, b) {
+        if (a.isUrgent != b.isUrgent) {
+          return a.isUrgent ? -1 : 1;
+        }
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    return sorted;
+  }
+
+  List<TransmissionQueueItem> _upsertQueueItem(
+    List<TransmissionQueueItem> items,
+    TransmissionQueueItem item,
+  ) {
+    return _prioritizedQueueItems([
+      item,
+      ...items.where((existing) => existing.id != item.id),
+    ]);
+  }
+
   TransmissionState _stateFromResult(
     SecureTransmissionResult result, {
     required String status,
@@ -686,6 +858,7 @@ class TransmissionController extends Notifier<TransmissionState> {
     required List<String> logs,
     required List<TransmissionReceipt> receipts,
     required String doctorPayload,
+    required List<DoctorPayloadRecord> doctorPayloads,
     required ClinicalTransmissionPlan plan,
     required List<ValidationIssue> validationIssues,
     required String emergencySnapshot,
@@ -732,6 +905,7 @@ class TransmissionController extends Notifier<TransmissionState> {
       rebuilt: result.rebuilt,
       normalAppStatus: result.naiveStatus,
       doctorPayload: doctorPayload,
+      doctorPayloads: doctorPayloads,
       changedFields: result.delta.changedFields,
       chunkCount: result.chunkCount,
       parityCount: result.parityCount,
