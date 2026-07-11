@@ -15,6 +15,13 @@ class SecureTransmissionResult {
     required this.survivalPercent,
     required this.chunkCount,
     required this.parityCount,
+    required this.chunksSent,
+    required this.chunksUsed,
+    required this.checksumMatch,
+    required this.sourceChecksum,
+    required this.rebuiltChecksum,
+    required this.naiveStatus,
+    required this.naiveSucceeded,
     required this.firstPayloadLabel,
     required this.encryptedByteCount,
     required this.payload,
@@ -26,6 +33,13 @@ class SecureTransmissionResult {
   final int survivalPercent;
   final int chunkCount;
   final int parityCount;
+  final int chunksSent;
+  final int chunksUsed;
+  final bool checksumMatch;
+  final String sourceChecksum;
+  final String rebuiltChecksum;
+  final String naiveStatus;
+  final bool naiveSucceeded;
   final String firstPayloadLabel;
   final int encryptedByteCount;
   final String payload;
@@ -63,6 +77,13 @@ SecureTransmissionResult simulateSecureTransmission({
   final lostPieces = (chunks.length * lossRate).ceil();
   final dataChunks = chunks.where((chunk) => !chunk.parity).length;
   final rebuilt = lostPieces <= sparePieces;
+  final chunksUsed = (chunks.length - lostPieces)
+      .clamp(0, chunks.length)
+      .toInt();
+  final sourceChecksum = _checksum(delta.payload);
+  final rebuiltChecksum = rebuilt
+      ? sourceChecksum
+      : _checksum('partial:$payload');
   final survival = rebuilt
       ? 100
       : (((chunks.length - lostPieces) / dataChunks) * 100)
@@ -76,10 +97,29 @@ SecureTransmissionResult simulateSecureTransmission({
     survivalPercent: survival,
     chunkCount: dataChunks,
     parityCount: sparePieces,
+    chunksSent: chunks.length,
+    chunksUsed: chunksUsed,
+    checksumMatch: rebuilt && sourceChecksum == rebuiltChecksum,
+    sourceChecksum: sourceChecksum,
+    rebuiltChecksum: rebuiltChecksum,
+    naiveStatus: lostPieces == 0
+        ? 'Delivered'
+        : reliability < 65
+        ? 'Failed after full resend'
+        : 'Stalled on full resend',
+    naiveSucceeded: lostPieces == 0,
     firstPayloadLabel: queue.first.label,
     encryptedByteCount: utf8.encode(payload).length,
     payload: payload,
   );
+}
+
+String _checksum(String value) {
+  final hash = value.codeUnits.fold<int>(
+    0x811c9dc5,
+    (current, unit) => (current ^ unit) * 0x01000193,
+  );
+  return hash.toUnsigned(32).toRadixString(16).padLeft(8, '0');
 }
 
 String _encrypted(String value) {

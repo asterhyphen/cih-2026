@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/patient_model.dart';
+import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../logic/secure_transmission.dart';
 
 class TransmissionActivity {
@@ -17,6 +18,32 @@ class TransmissionActivity {
   final DateTime timestamp;
 }
 
+class TransmissionReceipt {
+  const TransmissionReceipt({
+    required this.timestamp,
+    required this.chunksSent,
+    required this.chunksDropped,
+    required this.chunksUsed,
+    required this.checksumMatch,
+    required this.medGateStatus,
+    required this.naiveStatus,
+    required this.rebuilt,
+    required this.sourceChecksum,
+    required this.rebuiltChecksum,
+  });
+
+  final DateTime timestamp;
+  final int chunksSent;
+  final int chunksDropped;
+  final int chunksUsed;
+  final bool checksumMatch;
+  final String medGateStatus;
+  final String naiveStatus;
+  final bool rebuilt;
+  final String sourceChecksum;
+  final String rebuiltChecksum;
+}
+
 class TransmissionState {
   const TransmissionState({
     this.status = 'idle',
@@ -24,7 +51,9 @@ class TransmissionState {
     this.message = 'Waiting to transmit',
     this.history = const <TransmissionActivity>[],
     this.logs = const <String>[],
+    this.receipts = const <TransmissionReceipt>[],
     this.survivalPercent = 0,
+    this.resilienceScore = 0,
     this.lostPieces = 0,
     this.rebuilt = false,
     this.normalAppStatus = 'Waiting',
@@ -42,7 +71,9 @@ class TransmissionState {
   final String message;
   final List<TransmissionActivity> history;
   final List<String> logs;
+  final List<TransmissionReceipt> receipts;
   final int survivalPercent;
+  final int resilienceScore;
   final int lostPieces;
   final bool rebuilt;
   final String normalAppStatus;
@@ -84,45 +115,59 @@ class TransmissionController extends Notifier<TransmissionState> {
                 ),
                 ...state.history,
               ],
+        logs: state.logs,
+        receipts: state.receipts,
+        doctorPayload: state.doctorPayload,
       );
     }
   }
 
   Future<void> sendPatientRecord({
     required PatientModel patient,
-    required int reliability,
-    required int latencyMs,
     int sparePieces = 3,
   }) async {
-    final result = simulateSecureTransmission(
+    final initialNetwork = ref.read(networkSimulatorProvider);
+    final initialResult = simulateSecureTransmission(
       patient: patient,
       previousRecord: _lastSentRecord,
-      reliability: reliability,
+      reliability: initialNetwork.reliability,
       sparePieces: sparePieces,
     );
-    if (!result.delta.hasDelta) {
+    if (!initialResult.delta.hasDelta) {
       state = TransmissionState(
         status: 'buffered',
         progress: 100,
-        message: 'No new changes detected; buffer held and nothing sent',
+        message: 'No new changes detected; buffer held',
         history: state.history,
-        logs: [
-          'Record matched last delivery; skipped duplicate send.',
-          ...state.logs,
-        ],
+        logs: ['Duplicate record skipped.', ...state.logs],
+        receipts: state.receipts,
         survivalPercent: state.survivalPercent,
+        resilienceScore: state.resilienceScore,
         doctorPayload: state.doctorPayload,
         normalAppStatus: state.normalAppStatus,
         deltaPayload: state.deltaPayload,
         encryptedPreview: state.encryptedPreview,
-        proofSummary: 'No new changes detected; duplicate buffered',
+        proofSummary: 'No changed fields; duplicate buffered',
       );
       return;
     }
 
+    late SecureTransmissionResult result;
+    var reliability = initialNetwork.reliability;
+    var latencyMs = initialNetwork.latencyMs;
     for (var step = 20; step <= 100; step += 20) {
+      final liveNetwork = ref.read(networkSimulatorProvider);
+      reliability = liveNetwork.reliability;
+      latencyMs = liveNetwork.latencyMs;
+      result = simulateSecureTransmission(
+        patient: patient,
+        previousRecord: _lastSentRecord,
+        reliability: reliability,
+        sparePieces: sparePieces,
+      );
       await Future<void>.delayed(Duration(milliseconds: latencyMs ~/ 12));
-      state = TransmissionState(
+      state = _stateFromResult(
+        result,
         status: step < 100
             ? 'transmitting'
             : result.rebuilt
@@ -130,27 +175,14 @@ class TransmissionController extends Notifier<TransmissionState> {
             : 'partial',
         progress: step,
         message: step < 100
-            ? 'Sending urgent vitals before photo data'
+            ? 'Sending priority chunks'
             : result.rebuilt
-            ? 'Doctor record rebuilt from protected chunks'
-            : 'Not enough chunks survived for full rebuild',
+            ? 'Doctor record rebuilt'
+            : 'Rebuild threshold missed',
         history: state.history,
         logs: state.logs,
-        survivalPercent: result.survivalPercent,
-        lostPieces: result.lostPieces,
-        rebuilt: result.rebuilt,
-        normalAppStatus: result.lostPieces > 0
-            ? 'Frozen waiting for resend'
-            : 'Delivered',
+        receipts: state.receipts,
         doctorPayload: state.doctorPayload,
-        changedFields: result.delta.changedFields,
-        chunkCount: result.chunkCount,
-        parityCount: result.parityCount,
-        deltaPayload: result.delta.payload,
-        encryptedPreview: result.payload,
-        proofSummary: result.rebuilt
-            ? 'Rebuilt from ${result.chunkCount} data chunks and ${result.parityCount} parity pieces'
-            : 'Partial delivery; ${result.lostPieces} pieces lost',
       );
     }
 
@@ -158,13 +190,15 @@ class TransmissionController extends Notifier<TransmissionState> {
       _lastSentRecord = patient.toWireMap();
     }
 
+    final receipt = _receiptFromResult(result);
     final activity = TransmissionActivity(
       status: result.rebuilt ? 'rebuilt' : 'partial',
       payload: result.delta.changedFields.join(', '),
       networkMode: '$reliability% / ${latencyMs}ms',
       timestamp: DateTime.now(),
     );
-    state = TransmissionState(
+    state = _stateFromResult(
+      result,
       status: result.rebuilt ? 'delivered' : 'partial',
       progress: 100,
       message: result.rebuilt
@@ -172,27 +206,64 @@ class TransmissionController extends Notifier<TransmissionState> {
           : 'Partial data held for retry',
       history: [activity, ...state.history],
       logs: [
-        '${result.lostPieces} pieces were lost; ${result.rebuilt ? 'message rebuilt anyway' : 'waiting for retry'}.',
-        'Delta sent: ${result.delta.changedFields.join(', ')}.',
-        'Encrypted payload: ${result.encryptedByteCount} bytes.',
-        'Priority queue sent ${result.firstPayloadLabel} first.',
+        '${result.lostPieces} chunks dropped; ${result.chunksUsed} rebuilt.',
+        'Checksum ${result.checksumMatch ? 'matched' : 'mismatched'}: '
+            '${result.sourceChecksum}.',
+        'Compare: MedGate ${receipt.medGateStatus}; naive ${receipt.naiveStatus}.',
+        'Delta fields: ${result.delta.changedFields.join(', ')}.',
         ...state.logs,
       ],
+      receipts: [receipt, ...state.receipts],
+      doctorPayload: result.rebuilt ? patient.toPayload() : state.doctorPayload,
+    );
+  }
+
+  TransmissionState _stateFromResult(
+    SecureTransmissionResult result, {
+    required String status,
+    required int progress,
+    required String message,
+    required List<TransmissionActivity> history,
+    required List<String> logs,
+    required List<TransmissionReceipt> receipts,
+    required String doctorPayload,
+  }) {
+    return TransmissionState(
+      status: status,
+      progress: progress,
+      message: message,
+      history: history,
+      logs: logs,
+      receipts: receipts,
       survivalPercent: result.survivalPercent,
+      resilienceScore: result.survivalPercent,
       lostPieces: result.lostPieces,
       rebuilt: result.rebuilt,
-      normalAppStatus: result.lostPieces > 0
-          ? 'Frozen waiting for resend'
-          : 'Delivered',
-      doctorPayload: result.rebuilt ? patient.toPayload() : state.doctorPayload,
+      normalAppStatus: result.naiveStatus,
+      doctorPayload: doctorPayload,
       changedFields: result.delta.changedFields,
       chunkCount: result.chunkCount,
       parityCount: result.parityCount,
       deltaPayload: result.delta.payload,
       encryptedPreview: result.payload,
       proofSummary: result.rebuilt
-          ? 'Rebuilt from ${result.chunkCount} data chunks and ${result.parityCount} parity pieces'
-          : 'Partial delivery; ${result.lostPieces} pieces lost',
+          ? 'Rebuilt from ${result.chunksUsed}/${result.chunksSent} chunks'
+          : 'Partial delivery; ${result.lostPieces} chunks dropped',
+    );
+  }
+
+  TransmissionReceipt _receiptFromResult(SecureTransmissionResult result) {
+    return TransmissionReceipt(
+      timestamp: DateTime.now(),
+      chunksSent: result.chunksSent,
+      chunksDropped: result.lostPieces,
+      chunksUsed: result.chunksUsed,
+      checksumMatch: result.checksumMatch,
+      medGateStatus: result.rebuilt ? 'Rebuilt' : 'Partial',
+      naiveStatus: result.naiveStatus,
+      rebuilt: result.rebuilt,
+      sourceChecksum: result.sourceChecksum,
+      rebuiltChecksum: result.rebuiltChecksum,
     );
   }
 }

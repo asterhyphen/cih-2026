@@ -1,3 +1,5 @@
+import 'package:cih/features/data/patient_model.dart';
+import 'package:cih/features/network_simulator/providers/network_simulator_provider.dart';
 import 'package:cih/features/transmission_engine/logic/chunking.dart';
 import 'package:cih/features/transmission_engine/logic/parity.dart';
 import 'package:cih/features/transmission_engine/providers/transmission_provider.dart';
@@ -40,4 +42,35 @@ void main() {
     expect(state.history, isNotEmpty);
     expect(state.history.first.status, 'delivered');
   });
+
+  test(
+    'compare mode distinguishes MedGate rebuild from naive resend',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(networkSimulatorProvider.notifier).setReliability(85);
+      await container
+          .read(transmissionProvider.notifier)
+          .sendPatientRecord(
+            patient: const PatientModel(
+              id: 'P2',
+              displayName: 'Grace Hopper',
+              age: 79,
+              bloodPressure: '118/74',
+              heartRate: 84,
+              oxygenSaturation: 98,
+              temperature: 36.8,
+              notes: 'Needs review',
+              photoRef: 'xray-1',
+            ),
+          );
+      final state = container.read(transmissionProvider);
+
+      expect(state.rebuilt, isTrue);
+      expect(state.receipts, isNotEmpty);
+      expect(state.receipts.first.checksumMatch, isTrue);
+      expect(state.normalAppStatus, isNot('Delivered'));
+    },
+  );
 }

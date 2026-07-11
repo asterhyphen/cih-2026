@@ -8,9 +8,9 @@ MedGate is a Flutter-based clinical communications prototype for secure, contact
 - Authentication flow with local registration and sign-in
 - Onboarding and route-based navigation with Go Router
 - Glass-style dashboard shell and reusable UI widgets
-- NFC capture screen with manual fallback entry and permission-aware guidance
+- NFC capture, manual fallback entry, patient-card writing, and permission-aware guidance
 - A real transmission engine with delta encoding, priority ordering, encrypted payload packaging, and parity-style chunk recovery
-- A network simulator that changes transmission outcomes in real time
+- A network simulator with Resilience Score, Integrity Log, and Compare Mode
 - A specialist console that shows a proof-oriented receipt of rebuilt data and changed fields
 - Local persistence for theme preferences
 
@@ -34,13 +34,14 @@ MedGate is a Flutter-based clinical communications prototype for secure, contact
 ### 3. NFC capture
 - The NFC screen supports a guided scan experience with an animated popup while a session is active.
 - If NFC is unavailable, the app shows a permission-aware guidance state and allows manual entry instead of failing silently.
-- Patient details can be edited after capture and validated before sending.
+- Patient details can be edited after capture, written to a writable NFC tag, and validated before sending.
 
 ### 4. Protected transmission flow
 - Patient updates are transformed into a protected payload and chunked for preview.
 - The app uses delta encoding so only changed fields are sent when possible.
-- Reliability and latency changes directly affect survival and rebuild outcomes, and the specialist console shows proof of what survived and what was reconstructed.
-- The doctor side can review rebuilt records, changed fields, and the encrypted payload preview.
+- Reliability and latency changes directly affect survival and rebuild outcomes.
+- Resilience Score, Integrity Log, and Compare Mode show MedGate recovery beside a naive full-payload resend.
+- The doctor side can review rebuilt records, changed fields, capture source, checksum state, and the encrypted payload preview.
 
 ### 5. Specialist console
 - The specialist screen surfaces the reconstructed patient payload, network quality, triage recommendation, and transmission outcome.

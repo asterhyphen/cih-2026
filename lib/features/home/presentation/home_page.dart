@@ -47,7 +47,7 @@ class HomePage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Track intake progress, transmission health, and specialist readiness in one place.',
+                  'Intake, transmission health, and specialist readiness.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 20),
@@ -63,31 +63,28 @@ class HomePage extends ConsumerWidget {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              patient == null ? 'No patient' : 'Ready',
-                              style: Theme.of(context).textTheme.labelMedium,
-                            ),
-                          ),
+                          _StatusPill(ready: patient != null),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Text('Captured payload: ${captureState.payload}'),
+                      if (patient == null)
+                        const _EmptyLine(
+                          icon: Icons.person_search_rounded,
+                          text: 'No patient in queue',
+                        )
+                      else
+                        Text('Captured payload: ${captureState.payload}'),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                          _SummaryChip(
+                            label: 'Source',
+                            value: captureState.captureSource == 'nfc'
+                                ? 'NFC'
+                                : 'Manual',
+                          ),
                           _SummaryChip(
                             label: 'Chunks',
                             value: '${chunks.length}',
@@ -111,15 +108,18 @@ class HomePage extends ConsumerWidget {
                       Text('Proof: ${transmissionState.proofSummary}'),
                       const SizedBox(height: 4),
                       Text(
-                        'Triage score: ${assessment.score}/100 • ${assessment.recommendation}',
+                        'Triage score: ${assessment.score}/100 - '
+                        '${assessment.recommendation}',
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Adaptive rebuild: ${adaptiveResult.summary} (${adaptiveResult.survivalPercent}%)',
+                        'Adaptive rebuild: ${adaptiveResult.summary} '
+                        '(${adaptiveResult.survivalPercent}%)',
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Delta payload: ${transmissionState.deltaPayload.isEmpty ? '—' : transmissionState.deltaPayload}',
+                        'Delta payload: '
+                        '${transmissionState.deltaPayload.isEmpty ? '-' : transmissionState.deltaPayload}',
                       ),
                       const SizedBox(height: 8),
                       LinearProgressIndicator(
@@ -140,7 +140,8 @@ class HomePage extends ConsumerWidget {
                               (entry) => Padding(
                                 padding: const EdgeInsets.only(bottom: 6),
                                 child: Text(
-                                  '• ${entry.status} · ${entry.payload} · ${entry.networkMode}',
+                                  '- ${entry.status} - ${entry.payload} - '
+                                  '${entry.networkMode}',
                                 ),
                               ),
                             ),
@@ -154,11 +155,7 @@ class HomePage extends ConsumerWidget {
                                 ? null
                                 : () => ref
                                       .read(transmissionProvider.notifier)
-                                      .sendPatientRecord(
-                                        patient: patient,
-                                        reliability: networkState.reliability,
-                                        latencyMs: networkState.latencyMs,
-                                      ),
+                                      .sendPatientRecord(patient: patient),
                             child: const Text('Send'),
                           ),
                           const SizedBox(width: 12),
@@ -181,6 +178,20 @@ class HomePage extends ConsumerWidget {
   }
 }
 
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.ready});
+
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(ready ? Icons.check_circle_rounded : Icons.info_rounded),
+      label: Text(ready ? 'Ready' : 'Empty'),
+    );
+  }
+}
+
 class _SummaryChip extends StatelessWidget {
   const _SummaryChip({required this.label, required this.value});
 
@@ -189,16 +200,20 @@ class _SummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$label: $value',
-        style: Theme.of(context).textTheme.labelMedium,
-      ),
+    return Chip(label: Text('$label: $value'));
+  }
+}
+
+class _EmptyLine extends StatelessWidget {
+  const _EmptyLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(text)],
     );
   }
 }

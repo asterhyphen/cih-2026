@@ -7,6 +7,7 @@ class NetworkState {
     this.reliability = 98,
     this.deliveryImpact = 'Low risk',
     this.qualityLabel = 'Excellent',
+    this.compareMode = true,
   });
 
   final String mode;
@@ -14,6 +15,7 @@ class NetworkState {
   final int reliability;
   final String deliveryImpact;
   final String qualityLabel;
+  final bool compareMode;
 }
 
 class NetworkSimulatorController extends Notifier<NetworkState> {
@@ -30,22 +32,35 @@ class NetworkSimulatorController extends Notifier<NetworkState> {
     state = _fromValues(latency, state.reliability);
   }
 
+  void setCompareMode(bool value) {
+    state = NetworkState(
+      mode: state.mode,
+      latencyMs: state.latencyMs,
+      reliability: state.reliability,
+      deliveryImpact: state.deliveryImpact,
+      qualityLabel: state.qualityLabel,
+      compareMode: value,
+    );
+  }
+
   void setMode(String mode) {
     if (mode == 'degraded') {
-      state = const NetworkState(
+      state = NetworkState(
         mode: 'degraded',
         latencyMs: 320,
         reliability: 64,
         deliveryImpact: 'High risk',
         qualityLabel: 'Poor',
+        compareMode: state.compareMode,
       );
     } else {
-      state = const NetworkState(
+      state = NetworkState(
         mode: 'stable',
         latencyMs: 80,
         reliability: 98,
         deliveryImpact: 'Low risk',
         qualityLabel: 'Excellent',
+        compareMode: state.compareMode,
       );
     }
   }
@@ -68,6 +83,7 @@ class NetworkSimulatorController extends Notifier<NetworkState> {
       reliability: reliability,
       deliveryImpact: risk,
       qualityLabel: quality,
+      compareMode: state.compareMode,
     );
   }
 }

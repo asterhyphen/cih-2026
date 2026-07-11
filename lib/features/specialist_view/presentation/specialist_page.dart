@@ -17,6 +17,9 @@ class SpecialistPage extends ConsumerWidget {
     final captureState = ref.watch(nfcProvider);
     final networkState = ref.watch(networkSimulatorProvider);
     final transmission = ref.watch(transmissionProvider);
+    final receipt = transmission.receipts.isEmpty
+        ? null
+        : transmission.receipts.first;
     final assessment = evaluateTriage(
       payload: captureState.payload,
       reliability: networkState.reliability,
@@ -55,7 +58,12 @@ class SpecialistPage extends ConsumerWidget {
                         'Received patient data',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
+                      _IntegrityBanner(
+                        receipt: receipt,
+                        rebuilt: transmission.rebuilt,
+                      ),
+                      const SizedBox(height: 12),
                       Text('Received: ${transmission.doctorPayload}'),
                       const SizedBox(height: 12),
                       Wrap(
@@ -63,31 +71,29 @@ class SpecialistPage extends ConsumerWidget {
                         runSpacing: 8,
                         children: [
                           _InfoChip(
-                            label: 'Integrity',
-                            value: transmission.rebuilt ? 'Rebuilt' : 'Pending',
+                            icon: captureState.captureSource == 'nfc'
+                                ? Icons.nfc_rounded
+                                : Icons.edit_note_rounded,
+                            label: 'Source',
+                            value: captureState.captureSource == 'nfc'
+                                ? 'NFC'
+                                : 'Manual',
                           ),
-                          _InfoChip(label: 'Network', value: networkState.mode),
                           _InfoChip(
+                            icon: Icons.network_check_rounded,
+                            label: 'Network',
+                            value: networkState.mode,
+                          ),
+                          _InfoChip(
+                            icon: Icons.health_and_safety_rounded,
                             label: 'Survival',
                             value: '${transmission.survivalPercent}%',
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        'Changed fields: ${transmission.changedFields.join(', ')}',
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Receipt proof: ${transmission.proofSummary}'),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Delta payload: ${transmission.deltaPayload.isEmpty ? '—' : transmission.deltaPayload}',
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Reconstructed record: ${transmission.doctorPayload}',
-                      ),
-                      const SizedBox(height: 8),
+                      _ChangedFields(fields: transmission.changedFields),
+                      const SizedBox(height: 12),
                       Text(
                         'Triage severity: ${assessment.severity.toUpperCase()}',
                       ),
@@ -98,6 +104,7 @@ class SpecialistPage extends ConsumerWidget {
                       const SizedBox(height: 16),
                       Wrap(
                         spacing: 12,
+                        runSpacing: 8,
                         children: [
                           FilledButton(
                             onPressed: () => context.go('/home'),
@@ -121,24 +128,103 @@ class SpecialistPage extends ConsumerWidget {
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.label, required this.value});
+class _IntegrityBanner extends StatelessWidget {
+  const _IntegrityBanner({required this.receipt, required this.rebuilt});
 
+  final TransmissionReceipt? receipt;
+  final bool rebuilt;
+
+  @override
+  Widget build(BuildContext context) {
+    final matched = receipt?.checksumMatch ?? false;
+    final color = matched
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.error;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            matched ? Icons.verified_rounded : Icons.pending_actions_rounded,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              matched
+                  ? 'Checksum match confirmed'
+                  : rebuilt
+                  ? 'Awaiting checksum receipt'
+                  : 'No verified rebuild yet',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChangedFields extends StatelessWidget {
+  const _ChangedFields({required this.fields});
+
+  final List<String> fields;
+
+  @override
+  Widget build(BuildContext context) {
+    if (fields.isEmpty) {
+      return const _EmptyLine(
+        icon: Icons.difference_outlined,
+        text: 'No delta received yet',
+      );
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: fields
+          .map(
+            (field) => Chip(
+              avatar: const Icon(Icons.change_circle_outlined, size: 18),
+              label: Text(field),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$label: $value',
-        style: Theme.of(context).textTheme.labelMedium,
-      ),
+    return Chip(avatar: Icon(icon, size: 18), label: Text('$label: $value'));
+  }
+}
+
+class _EmptyLine extends StatelessWidget {
+  const _EmptyLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(text)],
     );
   }
 }

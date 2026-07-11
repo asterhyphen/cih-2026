@@ -24,12 +24,7 @@ class NetworkSimulatorPage extends ConsumerWidget {
       }
       await ref
           .read(transmissionProvider.notifier)
-          .sendPatientRecord(
-            patient: patient,
-            reliability: state.reliability,
-            latencyMs: state.latencyMs,
-            sparePieces: 2,
-          );
+          .sendPatientRecord(patient: patient, sparePieces: 2);
     }
 
     return Scaffold(
@@ -50,11 +45,9 @@ class NetworkSimulatorPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Transmission preview',
+                        'Transport',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 8),
-                      Text('Mode: ${state.mode}'),
                       const SizedBox(height: 8),
                       Text('Reliability: ${state.reliability}%'),
                       Slider(
@@ -86,12 +79,27 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         },
                       ),
                       const SizedBox(height: 8),
-                      Text('Delivery impact: ${state.deliveryImpact}'),
-                      const SizedBox(height: 8),
-                      Text('Signal quality: ${state.qualityLabel}'),
-                      const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _InfoPill(label: 'Mode', value: state.mode),
+                          _InfoPill(label: 'Risk', value: state.deliveryImpact),
+                          _InfoPill(label: 'Signal', value: state.qualityLabel),
+                        ],
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: state.compareMode,
+                        onChanged: (value) => ref
+                            .read(networkSimulatorProvider.notifier)
+                            .setCompareMode(value),
+                        title: const Text('Compare mode'),
+                        secondary: const Icon(Icons.compare_arrows_rounded),
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           FilledButton(
                             onPressed: () {
@@ -113,7 +121,7 @@ class NetworkSimulatorPage extends ConsumerWidget {
                           ),
                           FilledButton.tonal(
                             onPressed: runTransmission,
-                            child: const Text('Run transmission'),
+                            child: const Text('Run'),
                           ),
                         ],
                       ),
@@ -129,32 +137,31 @@ class NetworkSimulatorPage extends ConsumerWidget {
                         'Live proof',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 8),
-                      Text('Proof: ${transmission.proofSummary}'),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Our method: ${transmission.survivalPercent}% rebuilt',
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Normal app: ${transmission.normalAppStatus}'),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Lost pieces: ${transmission.lostPieces} / '
-                        '${transmission.chunkCount + transmission.parityCount}',
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Delta payload: ${transmission.deltaPayload.isEmpty ? '—' : transmission.deltaPayload}',
-                      ),
                       const SizedBox(height: 12),
-                      ...transmission.logs
-                          .take(5)
-                          .map(
-                            (log) => Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Text('• $log'),
-                            ),
-                          ),
+                      _ResilienceGauge(score: transmission.resilienceScore),
+                      const SizedBox(height: 12),
+                      if (state.compareMode)
+                        _CompareStrip(
+                          medGate: '${transmission.survivalPercent}% rebuilt',
+                          naive: transmission.normalAppStatus,
+                          medGateOk: transmission.rebuilt,
+                          naiveOk: transmission.normalAppStatus == 'Delivered',
+                        ),
+                      const SizedBox(height: 12),
+                      Text(transmission.proofSummary),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Integrity log',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      if (transmission.receipts.isEmpty)
+                        const _EmptyLine(
+                          icon: Icons.receipt_long_outlined,
+                          text: 'No transmissions yet',
+                        )
+                      else
+                        ...transmission.receipts.take(5).map(_ReceiptRow.new),
                     ],
                   ),
                 ),
@@ -164,6 +171,198 @@ class NetworkSimulatorPage extends ConsumerWidget {
         ),
       ),
       bottomNavigationBar: const FloatingNavBar(),
+    );
+  }
+}
+
+class _ResilienceGauge extends StatelessWidget {
+  const _ResilienceGauge({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final danger = score < 70;
+    final color = danger
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: danger ? 0.16 : 0.10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: score / 100),
+            duration: const Duration(milliseconds: 500),
+            builder: (context, value, _) => SizedBox(
+              width: 58,
+              height: 58,
+              child: CircularProgressIndicator(
+                value: value,
+                strokeWidth: 7,
+                color: color,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Resilience Score',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: score.toDouble()),
+                  duration: const Duration(milliseconds: 500),
+                  builder: (context, value, _) => Text(
+                    '${value.round()}%',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompareStrip extends StatelessWidget {
+  const _CompareStrip({
+    required this.medGate,
+    required this.naive,
+    required this.medGateOk,
+    required this.naiveOk,
+  });
+
+  final String medGate;
+  final String naive;
+  final bool medGateOk;
+  final bool naiveOk;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _CompareTile(label: 'MedGate', value: medGate, ok: medGateOk),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _CompareTile(label: 'Naive', value: naive, ok: naiveOk),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompareTile extends StatelessWidget {
+  const _CompareTile({
+    required this.label,
+    required this.value,
+    required this.ok,
+  });
+
+  final String label;
+  final String value;
+  final bool ok;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ok
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.error;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            ok ? Icons.check_circle_rounded : Icons.error_rounded,
+            color: color,
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReceiptRow extends StatelessWidget {
+  const _ReceiptRow(this.receipt);
+
+  final TransmissionReceipt receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = receipt.checksumMatch
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.error;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            receipt.checksumMatch
+                ? Icons.verified_rounded
+                : Icons.warning_rounded,
+            color: color,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${receipt.chunksSent} sent, ${receipt.chunksDropped} dropped, '
+              '${receipt.chunksUsed} rebuilt. Hash '
+              '${receipt.checksumMatch ? 'matched' : 'mismatched'}.',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: const Icon(Icons.network_check_rounded, size: 18),
+      label: Text('$label: $value'),
+    );
+  }
+}
+
+class _EmptyLine extends StatelessWidget {
+  const _EmptyLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(text)],
     );
   }
 }

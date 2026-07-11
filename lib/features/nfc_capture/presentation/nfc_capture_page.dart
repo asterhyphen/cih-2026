@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/widgets/animated_page_wrapper.dart';
 import '../../../core/widgets/floating_nav_bar.dart';
 import '../../../core/widgets/glass_container.dart';
-import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../../transmission_engine/logic/chunking.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../providers/nfc_provider.dart';
@@ -41,19 +40,13 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
 
   @override
   Widget build(BuildContext context) {
-    final captureState = ref.watch(nfcProvider);
-    final network = ref.watch(networkSimulatorProvider);
-    final transmission = ref.watch(transmissionProvider);
-    final patient = captureState.patient;
-    final chunks = buildProtectedChunks(captureState.payload);
-    final canSend =
-        patient != null && captureState.valid && patient.isValidForSend;
-
     ref.listen<NfcState>(nfcProvider, (previous, next) {
-      if (next.showGuide && next.status == 'scanning' && !_scanDialogVisible) {
+      final guideActive =
+          next.showGuide &&
+          (next.status == 'scanning' || next.status == 'writing');
+      if (guideActive && !_scanDialogVisible) {
         _presentScanDialog();
-      } else if (_scanDialogVisible &&
-          (!next.showGuide || next.status != 'scanning')) {
+      } else if (_scanDialogVisible && !guideActive) {
         if (Navigator.canPop(context)) {
           Navigator.of(context, rootNavigator: true).pop();
         }
@@ -62,7 +55,7 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
         }
       }
 
-      if (previous?.message != next.message && next.status != 'scanning') {
+      if (previous?.message != next.message && !guideActive) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
@@ -78,6 +71,12 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
         );
       }
     });
+    final captureState = ref.watch(nfcProvider);
+    final transmission = ref.watch(transmissionProvider);
+    final patient = captureState.patient;
+    final chunks = buildProtectedChunks(captureState.payload);
+    final canSend =
+        patient != null && captureState.valid && patient.isValidForSend;
 
     return Scaffold(
       body: AnimatedPageWrapper(
@@ -93,7 +92,7 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Capture a patient record with NFC or fall back to manual entry when scanning is unavailable.',
+                  'Capture, edit, write, and send a patient record.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 20),
@@ -163,6 +162,15 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                             label: const Text('Type instead'),
                           ),
                           OutlinedButton.icon(
+                            onPressed: canSend
+                                ? () => ref
+                                      .read(nfcProvider.notifier)
+                                      .writePatientCard()
+                                : null,
+                            icon: const Icon(Icons.tap_and_play_outlined),
+                            label: const Text('Write card'),
+                          ),
+                          OutlinedButton.icon(
                             onPressed: () =>
                                 ref.read(nfcProvider.notifier).clear(),
                             icon: const Icon(Icons.refresh_outlined),
@@ -183,6 +191,8 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                           'Patient details',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
+                        const SizedBox(height: 12),
+                        _SourceBadge(source: captureState.captureSource),
                         const SizedBox(height: 12),
                         _VitalField(
                           label: 'Patient ID',
@@ -261,11 +271,7 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                           onPressed: canSend
                               ? () => ref
                                     .read(transmissionProvider.notifier)
-                                    .sendPatientRecord(
-                                      patient: patient,
-                                      reliability: network.reliability,
-                                      latencyMs: network.latencyMs,
-                                    )
+                                    .sendPatientRecord(patient: patient)
                               : null,
                           child: const Text('Send protected update'),
                         ),
@@ -339,6 +345,34 @@ class _InfoPill extends StatelessWidget {
         children: [
           Text('$label: ', style: Theme.of(context).textTheme.labelMedium),
           Text(value, style: Theme.of(context).textTheme.labelMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceBadge extends StatelessWidget {
+  const _SourceBadge({required this.source});
+
+  final String source;
+
+  @override
+  Widget build(BuildContext context) {
+    final isNfc = source == 'nfc';
+    final label = isNfc ? 'Captured by NFC' : 'Manual fallback';
+    final icon = isNfc ? Icons.nfc_rounded : Icons.edit_note_rounded;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
         ],
       ),
     );

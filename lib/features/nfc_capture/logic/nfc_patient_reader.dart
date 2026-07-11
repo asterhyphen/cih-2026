@@ -11,6 +11,7 @@ import '../../data/patient_model.dart';
 
 abstract class NfcPatientReaderInterface {
   Future<PatientModel> readPatient();
+  Future<void> writePatient(PatientModel patient);
 }
 
 class NfcPermissionException implements Exception {
@@ -65,6 +66,44 @@ class NfcPatientReader implements NfcPatientReaderInterface {
     return completer.future.timeout(const Duration(seconds: 20));
   }
 
+  @override
+  Future<void> writePatient(PatientModel patient) async {
+    final availability = await NfcManager.instance.checkAvailability();
+    if (availability != NfcAvailability.enabled) {
+      throw const NfcPermissionException(
+        'Enable NFC in device settings before writing a patient card.',
+      );
+    }
+
+    final completer = Completer<void>();
+    await NfcManager.instance.startSession(
+      pollingOptions: const {
+        NfcPollingOption.iso14443,
+        NfcPollingOption.iso15693,
+      },
+      alertMessageIos: 'Hold near a writable patient card',
+      onDiscovered: (tag) async {
+        try {
+          await _writePayload(tag, patient.toPayload());
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+          await NfcManager.instance.stopSession(
+            alertMessageIos: 'Patient card written',
+          );
+        } catch (error) {
+          if (!completer.isCompleted) {
+            completer.completeError(error);
+          }
+          await NfcManager.instance.stopSession(
+            errorMessageIos: 'Could not write patient card',
+          );
+        }
+      },
+    );
+    return completer.future.timeout(const Duration(seconds: 20));
+  }
+
   Future<String> _readPayload(NfcTag tag) async {
     final message = await _readNdefMessage(tag);
     final records = message?.records ?? const <NdefRecord>[];
@@ -89,6 +128,38 @@ class NfcPatientReader implements NfcPatientReaderInterface {
       default:
         throw UnsupportedError('NFC is not supported on this platform');
     }
+  }
+
+  Future<void> _writePayload(NfcTag tag, String payload) async {
+    final message = NdefMessage(records: [_textRecord(payload)]);
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        final ndef = NdefAndroid.from(tag);
+        if (ndef == null || !ndef.isWritable) {
+          throw const NfcPermissionException('This NFC tag is not writable.');
+        }
+        await ndef.writeNdefMessage(message);
+      case TargetPlatform.iOS:
+        final ndef = NdefIos.from(tag);
+        final status = await ndef?.queryNdefStatus();
+        if (ndef == null || status?.status != NdefStatusIos.readWrite) {
+          throw const NfcPermissionException('This NFC tag is not writable.');
+        }
+        await ndef.writeNdef(message);
+      default:
+        throw UnsupportedError('NFC is not supported on this platform');
+    }
+  }
+
+  NdefRecord _textRecord(String value) {
+    final language = utf8.encode('en');
+    final text = utf8.encode(value);
+    return NdefRecord(
+      typeNameFormat: TypeNameFormat.wellKnown,
+      type: Uint8List.fromList(utf8.encode('T')),
+      identifier: Uint8List(0),
+      payload: Uint8List.fromList([language.length, ...language, ...text]),
+    );
   }
 
   bool _isTextRecord(NdefRecord record) {

@@ -14,6 +14,7 @@ class NfcState {
     this.buffered = false,
     this.requiresPermission = false,
     this.showGuide = false,
+    this.captureSource = 'none',
   });
 
   final String status;
@@ -25,6 +26,7 @@ class NfcState {
   final bool buffered;
   final bool requiresPermission;
   final bool showGuide;
+  final String captureSource;
 
   NfcState copyWith({
     String? status,
@@ -36,6 +38,7 @@ class NfcState {
     bool? buffered,
     bool? requiresPermission,
     bool? showGuide,
+    String? captureSource,
   }) {
     return NfcState(
       status: status ?? this.status,
@@ -47,6 +50,7 @@ class NfcState {
       buffered: buffered ?? this.buffered,
       requiresPermission: requiresPermission ?? this.requiresPermission,
       showGuide: showGuide ?? this.showGuide,
+      captureSource: captureSource ?? this.captureSource,
     );
   }
 }
@@ -80,6 +84,7 @@ class NfcController extends Notifier<NfcState> {
         confidence: 100,
         patient: patient,
         showGuide: false,
+        captureSource: 'nfc',
       );
     } catch (error) {
       final permissionRequired =
@@ -107,6 +112,7 @@ class NfcController extends Notifier<NfcState> {
       valid: false,
       confidence: 0,
       patient: PatientModel.empty,
+      captureSource: 'manual',
     );
   }
 
@@ -121,7 +127,54 @@ class NfcController extends Notifier<NfcState> {
       valid: patient.isValidForSend,
       confidence: patient.isValidForSend ? 100 : 0,
       patient: patient,
+      captureSource: 'manual',
     );
+  }
+
+  Future<void> writePatientCard() async {
+    final patient = state.patient;
+    if (patient == null || !patient.isValidForSend) {
+      state = state.copyWith(
+        status: 'manual',
+        message: 'Complete required patient fields before writing a card',
+        valid: false,
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      status: 'writing',
+      message: 'Hold near a writable patient NFC card',
+      requiresPermission: false,
+      showGuide: true,
+    );
+
+    try {
+      await _reader.writePatient(patient);
+      state = state.copyWith(
+        status: 'written',
+        payload: patient.toPayload(),
+        message: 'Patient card written and ready to scan',
+        valid: true,
+        confidence: 100,
+        buffered: false,
+        showGuide: false,
+      );
+    } catch (error) {
+      final permissionRequired =
+          error is NfcPermissionException ||
+          error.toString().toLowerCase().contains('permission') ||
+          error.toString().toLowerCase().contains('nfc is') ||
+          error.toString().toLowerCase().contains('not writable');
+      state = state.copyWith(
+        status: permissionRequired ? 'permission-required' : 'write failed',
+        message: permissionRequired
+            ? 'NFC writing is not available. Check NFC settings or use manual entry.'
+            : 'NFC card could not be written. Try another tag or keep manual entry.',
+        requiresPermission: permissionRequired,
+        showGuide: false,
+      );
+    }
   }
 
   void updateVitals({
