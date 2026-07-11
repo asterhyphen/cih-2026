@@ -4,16 +4,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../providers/settings_provider.dart';
 
 class ProfileHeader extends ConsumerWidget {
-  const ProfileHeader({super.key});
+  const ProfileHeader({super.key, this.onEdit});
+
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    final displayName = authState.name.isNotEmpty ? authState.name : 'Dr. Eion Morgan';
-    final email = authState.email.isNotEmpty ? authState.email : 'eion.morgan@medgate.org';
-
+    final profile = ref.watch(profileProvider);
     final topPadding = MediaQuery.of(context).padding.top + 8;
 
     return Container(
@@ -84,18 +84,21 @@ class ProfileHeader extends ConsumerWidget {
               Positioned(
                 bottom: 0,
                 right: 0,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF22C55E),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: const Icon(
-                    Icons.edit_rounded,
-                    color: Colors.white,
-                    size: 16,
+                child: GestureDetector(
+                  onTap: onEdit,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF22C55E),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.edit_rounded,
+                      color: Colors.white,
+                      size: 16,
+                    ),
                   ),
                 ),
               ),
@@ -103,7 +106,7 @@ class ProfileHeader extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            displayName,
+            profile.name,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -111,7 +114,7 @@ class ProfileHeader extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            email,
+            profile.email,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.white70,
                 ),
@@ -130,18 +133,18 @@ class ProfileHeader extends ConsumerWidget {
                 ),
               ],
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.stars_rounded,
+                const Icon(
+                  Icons.medical_services_rounded,
                   color: Color(0xFFD97706),
                   size: 16,
                 ),
-                SizedBox(width: 6),
+                const SizedBox(width: 6),
                 Text(
-                  'Premium Member',
-                  style: TextStyle(
+                  profile.role,
+                  style: const TextStyle(
                     color: Color(0xFFB45309),
                     fontWeight: FontWeight.bold,
                     fontSize: 12,

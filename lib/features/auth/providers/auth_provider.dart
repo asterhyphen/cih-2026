@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/app_theme.dart';
 
 class AuthState {
   const AuthState({
@@ -18,7 +19,20 @@ class AuthState {
 
 class AuthController extends Notifier<AuthState> {
   @override
-  AuthState build() => const AuthState();
+  AuthState build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final isAuthenticated = prefs.getBool('isAuthenticated') ?? false;
+    final name = prefs.getString('name') ?? 'Dr. Eion Morgan';
+    final email = prefs.getString('email') ?? 'eion.morgan@medgate.org';
+    final password = prefs.getString('password') ?? '';
+
+    return AuthState(
+      isAuthenticated: isAuthenticated,
+      name: name,
+      email: email,
+      password: password,
+    );
+  }
 
   bool register({
     required String name,
@@ -34,6 +48,13 @@ class AuthController extends Notifier<AuthState> {
       );
       return false;
     }
+
+    final prefs = ref.read(sharedPreferencesProvider);
+    prefs.setBool('isAuthenticated', true);
+    prefs.setString('name', name.trim());
+    prefs.setString('email', email.trim());
+    prefs.setString('password', password);
+
     state = AuthState(
       isAuthenticated: true,
       name: name.trim(),
@@ -59,20 +80,46 @@ class AuthController extends Notifier<AuthState> {
       return false;
     }
 
+    final name = state.name.isNotEmpty ? state.name : 'Dr. Eion Morgan';
+    final prefs = ref.read(sharedPreferencesProvider);
+    prefs.setBool('isAuthenticated', true);
+    prefs.setString('email', email.trim());
+    prefs.setString('password', password);
+    prefs.setString('name', name);
+
     state = AuthState(
       isAuthenticated: true,
-      name: state.name,
+      name: name,
       email: email.trim(),
       password: password,
     );
     return true;
   }
 
-  void signOut() => state = AuthState(
-    name: state.name,
-    email: state.email,
-    password: state.password,
-  );
+  void signOut() {
+    final prefs = ref.read(sharedPreferencesProvider);
+    prefs.setBool('isAuthenticated', false);
+
+    state = AuthState(
+      isAuthenticated: false,
+      name: state.name,
+      email: state.email,
+      password: state.password,
+    );
+  }
+
+  void syncProfile({required String name, required String email}) {
+    final prefs = ref.read(sharedPreferencesProvider);
+    prefs.setString('name', name);
+    prefs.setString('email', email);
+
+    state = AuthState(
+      isAuthenticated: state.isAuthenticated,
+      name: name,
+      email: email,
+      password: state.password,
+    );
+  }
 
   bool _validEmail(String email) => email.contains('@') && email.contains('.');
 }

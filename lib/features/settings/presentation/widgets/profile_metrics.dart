@@ -1,47 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/glass_style.dart';
+import '../../providers/settings_provider.dart';
 
-class ProfileMetrics extends StatelessWidget {
+class ProfileMetrics extends ConsumerWidget {
   const ProfileMetrics({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(profileProvider);
+
     return Row(
       children: [
         Expanded(
           child: _MetricCard(
-            icon: Icons.straighten_rounded,
+            icon: Icons.assignment_ind_rounded,
             iconColor: const Color(0xFFF97316),
-            label: 'Height',
-            value: '5.8 ft',
+            label: 'Role',
+            value: profile.role,
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: _MetricCard(
-            icon: Icons.monitor_weight_outlined,
+            icon: Icons.badge_rounded,
             iconColor: const Color(0xFF3B82F6),
-            label: 'Weight',
-            value: '154 lbs',
+            label: 'Badge',
+            value: profile.badge,
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: _MetricCard(
-            icon: Icons.cake_rounded,
+            icon: Icons.hourglass_empty_rounded,
             iconColor: const Color(0xFFEAB308),
-            label: 'Age',
-            value: '25',
+            label: 'Exp',
+            value: profile.experience,
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: _MetricCard(
             icon: Icons.bloodtype_rounded,
             iconColor: const Color(0xFFEF4444),
             label: 'Blood',
-            value: 'B+',
+            value: profile.bloodGroup,
           ),
         ),
       ],
@@ -49,7 +53,7 @@ class ProfileMetrics extends StatelessWidget {
   }
 }
 
-class _MetricCard extends StatelessWidget {
+class _MetricCard extends ConsumerWidget {
   const _MetricCard({
     required this.icon,
     required this.iconColor,
@@ -63,10 +67,10 @@ class _MetricCard extends StatelessWidget {
   final String value;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
       decoration: glassDecoration(
         color: isDark ? const Color(0x1F000000) : const Color(0x99FFFFFF),
         radius: 20,
@@ -75,7 +79,7 @@ class _MetricCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: iconColor.withValues(alpha: 0.15),
               shape: BoxShape.circle,
@@ -83,16 +87,18 @@ class _MetricCard extends StatelessWidget {
             child: Icon(
               icon,
               color: iconColor,
-              size: 20,
+              size: 18,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: isDark ? Colors.white54 : Colors.black45,
                   fontWeight: FontWeight.w500,
                 ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
@@ -100,7 +106,10 @@ class _MetricCard extends StatelessWidget {
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 12,
                 ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

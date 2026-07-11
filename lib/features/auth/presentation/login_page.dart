@@ -78,11 +78,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       },
                       child: const Text('Sign in'),
                     ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => context.go('/register'),
-                      child: const Text('Create account'),
-                    ),
                   ],
                 ),
               ),

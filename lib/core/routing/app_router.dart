@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/login_page.dart';
-import '../../features/auth/presentation/register_page.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/home/presentation/home_page.dart';
 import '../../features/network_simulator/presentation/network_simulator_page.dart';
@@ -14,7 +13,6 @@ import '../../features/specialist_view/presentation/specialist_page.dart';
 
 class AppRoutes {
   static const login = '/login';
-  static const register = '/register';
   static const onboarding = '/onboarding';
   static const home = '/home';
   static const nfcCapture = '/nfc-capture';
@@ -50,7 +48,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final path = state.matchedLocation;
       final isPublicRoute =
           path == AppRoutes.login ||
-          path == AppRoutes.register ||
           path == AppRoutes.onboarding;
 
       if (!isAuthenticated && !isPublicRoute) {
@@ -59,7 +56,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (isAuthenticated &&
           (path == AppRoutes.login ||
-              path == AppRoutes.register ||
               path == AppRoutes.onboarding)) {
         return AppRoutes.home;
       }
@@ -70,10 +66,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.login,
         pageBuilder: (context, state) => _fadeTransitionPage(state, const LoginPage()),
-      ),
-      GoRoute(
-        path: AppRoutes.register,
-        pageBuilder: (context, state) => _fadeTransitionPage(state, const RegisterPage()),
       ),
       GoRoute(
         path: AppRoutes.onboarding,
