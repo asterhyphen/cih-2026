@@ -352,10 +352,33 @@ class TransmissionController extends Notifier<TransmissionState> {
     required PatientModel patient,
     int sparePieces = 3,
   }) async {
+    if (!patient.isValidForSend) {
+      state = state.copyWith(
+        status: 'blocked',
+        progress: 0,
+        message: 'Complete required patient fields before sending',
+        proofSummary: 'Patient record failed local validation',
+      );
+      return;
+    }
+
+    final storage = ref.read(patientStorageProvider.notifier);
+    Map<String, String>? previousRecord;
+    try {
+      await storage.stageCapture(patient);
+      previousRecord = await storage.confirmedWireMap(patient.id);
+    } catch (error) {
+      state = state.copyWith(
+        status: 'failed',
+        progress: 0,
+        message: 'Local storage failed before transmission',
+        logs: ['Storage error: $error', ...state.logs],
+        proofSummary: 'Transmission not started; local baseline unavailable',
+      );
+      return;
+    }
+
     final initialNetwork = ref.read(networkSimulatorProvider);
-    final previousRecord = await ref
-        .read(patientStorageProvider.notifier)
-        .confirmedWireMap(patient.id);
     final initialResult = simulateSecureTransmission(
       patient: patient,
       previousRecord: previousRecord,
@@ -533,9 +556,15 @@ class TransmissionController extends Notifier<TransmissionState> {
     }
 
     if (result.rebuilt) {
-      await ref
-          .read(patientStorageProvider.notifier)
-          .markTransmissionConfirmed(patient);
+      try {
+        await storage.markTransmissionConfirmed(patient);
+      } catch (error) {
+        state = state.copyWith(
+          status: 'delivered',
+          message: 'Delivered, but local sync confirmation failed',
+          logs: ['Storage confirmation error: $error', ...state.logs],
+        );
+      }
     }
 
     final receipt = _receiptFromResult(result);
@@ -633,6 +662,7 @@ class TransmissionController extends Notifier<TransmissionState> {
       retryCount: updatedItems[itemIndex].retryCount + 1,
       createdAt: updatedItems[itemIndex].createdAt,
       payload: updatedItems[itemIndex].payload,
+      isUrgent: updatedItems[itemIndex].isUrgent,
     );
     state = state.copyWith(queueItems: updatedItems);
 

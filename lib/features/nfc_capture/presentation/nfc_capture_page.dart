@@ -81,8 +81,12 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
         ? const <String>[]
         : storage.latestDiff.summaries(patient, storedRecord?.confirmedPatient);
     final chunks = buildProtectedChunks(captureState.payload);
+    final sending = transmission.status == 'transmitting';
     final canSend =
-        patient != null && captureState.valid && patient.isValidForSend;
+        patient != null &&
+        captureState.valid &&
+        patient.isValidForSend &&
+        !sending;
 
     return Scaffold(
       body: AnimatedPageWrapper(
@@ -321,7 +325,9 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                                     .read(transmissionProvider.notifier)
                                     .sendPatientRecord(patient: patient)
                               : null,
-                          child: const Text('Send protected update'),
+                          child: Text(
+                            sending ? 'Sending...' : 'Send protected update',
+                          ),
                         ),
                       ],
                     ),

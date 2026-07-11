@@ -70,15 +70,24 @@ class SpecialistPage extends ConsumerWidget {
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: transmission.priorityFields.take(8).map((field) {
-                            final color = field.priority == ClinicalPriority.critical
+                          children: transmission.priorityFields.take(8).map((
+                            field,
+                          ) {
+                            final color =
+                                field.priority == ClinicalPriority.critical
                                 ? Theme.of(context).colorScheme.error
                                 : field.priority == ClinicalPriority.high
                                 ? Theme.of(context).colorScheme.primary
                                 : Theme.of(context).colorScheme.secondary;
                             return Chip(
-                              avatar: Icon(Icons.local_hospital_rounded, color: color, size: 18),
-                              label: Text('${field.label} · ${field.priority.name}'),
+                              avatar: Icon(
+                                Icons.local_hospital_rounded,
+                                color: color,
+                                size: 18,
+                              ),
+                              label: Text(
+                                '${field.label} · ${field.priority.name}',
+                              ),
                             );
                           }).toList(),
                         ),
@@ -110,9 +119,13 @@ class SpecialistPage extends ConsumerWidget {
                             value: '${transmission.survivalPercent}%',
                           ),
                           _InfoChip(
-                            icon: transmission.urgentCase ? Icons.emergency_rounded : Icons.assignment_turned_in_rounded,
+                            icon: transmission.urgentCase
+                                ? Icons.emergency_rounded
+                                : Icons.assignment_turned_in_rounded,
                             label: 'Urgency',
-                            value: transmission.urgentCase ? 'Urgent' : 'Routine',
+                            value: transmission.urgentCase
+                                ? 'Urgent'
+                                : 'Routine',
                           ),
                           _InfoChip(
                             icon: Icons.replay_circle_filled_rounded,
@@ -132,7 +145,10 @@ class SpecialistPage extends ConsumerWidget {
                       const SizedBox(height: 8),
                       Text('Recommendation: ${assessment.recommendation}'),
                       const SizedBox(height: 16),
-                      Text('Progressive sections', style: Theme.of(context).textTheme.labelLarge),
+                      Text(
+                        'Progressive sections',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 10,
@@ -141,9 +157,14 @@ class SpecialistPage extends ConsumerWidget {
                           final title = section.name.replaceAll('_', ' ');
                           return AnimatedContainer(
                             duration: const Duration(milliseconds: 400),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(title.toUpperCase()),
@@ -151,9 +172,18 @@ class SpecialistPage extends ConsumerWidget {
                         }).toList(),
                       ),
                       const SizedBox(height: 16),
-                      Text('Queue status', style: Theme.of(context).textTheme.labelLarge),
+                      Text(
+                        'Queue status',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
                       const SizedBox(height: 8),
-                      ...transmission.queueItems.take(3).map((item) => Text('• ${item.status.toUpperCase()}: ${item.summary}')),
+                      ...transmission.queueItems
+                          .take(3)
+                          .map(
+                            (item) => Text(
+                              '• ${item.status.toUpperCase()}: ${item.summary}',
+                            ),
+                          ),
                       const SizedBox(height: 16),
                       Wrap(
                         spacing: 12,
@@ -168,7 +198,12 @@ class SpecialistPage extends ConsumerWidget {
                             child: const Text('Review network'),
                           ),
                           FilledButton.tonal(
-                            onPressed: () {},
+                            onPressed: () => showDialog<void>(
+                              context: context,
+                              builder: (context) => _ProtocolOverviewDialog(
+                                transmission: transmission,
+                              ),
+                            ),
                             child: const Text('Protocol overview'),
                           ),
                         ],
@@ -185,8 +220,48 @@ class SpecialistPage extends ConsumerWidget {
   }
 }
 
+class _ProtocolOverviewDialog extends StatelessWidget {
+  const _ProtocolOverviewDialog({required this.transmission});
+
+  final TransmissionState transmission;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Protocol overview'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Status: ${transmission.status}'),
+          Text(
+            'Chunks: ${transmission.chunkCount} data + ${transmission.parityCount} parity',
+          ),
+          Text(
+            'Changed fields: ${transmission.changedFields.isEmpty ? 'None' : transmission.changedFields.join(', ')}',
+          ),
+          Text(
+            'Recovery: ${transmission.recoveryConfidencePercent}% confidence',
+          ),
+          Text('Proof: ${transmission.proofSummary}'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
 class _IntegrityBanner extends StatelessWidget {
-  const _IntegrityBanner({required this.receipt, required this.rebuilt, required this.urgent});
+  const _IntegrityBanner({
+    required this.receipt,
+    required this.rebuilt,
+    required this.urgent,
+  });
 
   final TransmissionReceipt? receipt;
   final bool rebuilt;
@@ -210,7 +285,11 @@ class _IntegrityBanner extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            urgent ? Icons.emergency_rounded : matched ? Icons.verified_rounded : Icons.pending_actions_rounded,
+            urgent
+                ? Icons.emergency_rounded
+                : matched
+                ? Icons.verified_rounded
+                : Icons.pending_actions_rounded,
             color: color,
           ),
           const SizedBox(width: 10),

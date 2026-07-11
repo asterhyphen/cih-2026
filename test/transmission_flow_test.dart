@@ -1,10 +1,38 @@
+import 'dart:io';
+
 import 'package:cih/features/data/patient_model.dart';
 import 'package:cih/features/network_simulator/providers/network_simulator_provider.dart';
+import 'package:cih/features/patient_storage/logic/patient_record_store.dart';
+import 'package:cih/features/patient_storage/providers/patient_storage_provider.dart';
 import 'package:cih/features/transmission_engine/logic/chunking.dart';
 import 'package:cih/features/transmission_engine/logic/parity.dart';
 import 'package:cih/features/transmission_engine/providers/transmission_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+Future<ProviderContainer> _containerWithFreshStore(String name) async {
+  sqfliteFfiInit();
+  final file = File('${Directory.systemTemp.path}/$name.db');
+  if (file.existsSync()) {
+    file.deleteSync();
+  }
+  final store = PatientRecordStore(
+    factory: databaseFactoryFfi,
+    databasePath: file.path,
+  );
+  final container = ProviderContainer(
+    overrides: [patientRecordStoreProvider.overrideWithValue(store)],
+  );
+  addTearDown(() async {
+    container.dispose();
+    await store.close();
+    if (file.existsSync()) {
+      file.deleteSync();
+    }
+  });
+  return container;
+}
 
 void main() {
   test('parity values are generated from chunks', () {
@@ -46,8 +74,7 @@ void main() {
   test(
     'compare mode distinguishes MedGate rebuild from naive resend',
     () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+      final container = await _containerWithFreshStore('medgate-flow-send');
 
       container.read(networkSimulatorProvider.notifier).setReliability(95);
       await container
