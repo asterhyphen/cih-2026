@@ -300,12 +300,18 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                               .read(nfcProvider.notifier)
                               .updateVitals(notes: value),
                         ),
-                        _VitalField(
-                          label: 'Photo reference',
+                        _PhotoReferenceField(
                           value: patient.photoRef,
-                          onChanged: (value) => ref
+                          onUsePlaceholder: () => ref
                               .read(nfcProvider.notifier)
-                              .updateVitals(photoRef: value),
+                              .updateVitals(
+                                photoRef: 'placeholder://patient-photo',
+                              ),
+                          onClear: patient.photoRef.isEmpty
+                              ? null
+                              : () => ref
+                                    .read(nfcProvider.notifier)
+                                    .updateVitals(photoRef: ''),
                         ),
                         SwitchListTile.adaptive(
                           contentPadding: EdgeInsets.zero,
@@ -453,6 +459,82 @@ class _DiffSummary extends StatelessWidget {
           Text('Delta preview', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 6),
           ...lines.take(5).map((line) => Text(line)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhotoReferenceField extends StatelessWidget {
+  const _PhotoReferenceField({
+    required this.value,
+    required this.onUsePlaceholder,
+    required this.onClear,
+  });
+
+  final String value;
+  final VoidCallback onUsePlaceholder;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = value.trim().isNotEmpty;
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Patient image', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 8),
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Material(
+              color: hasImage
+                  ? colorScheme.primaryContainer
+                  : colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onUsePlaceholder,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Center(
+                      child: Icon(
+                        hasImage
+                            ? Icons.image_rounded
+                            : Icons.add_photo_alternate_outlined,
+                        size: 56,
+                        color: hasImage
+                            ? colorScheme.onPrimaryContainer
+                            : colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Row(
+                        children: [
+                          IconButton.filledTonal(
+                            tooltip: 'Use placeholder image',
+                            onPressed: onUsePlaceholder,
+                            icon: const Icon(Icons.image_search_rounded),
+                          ),
+                          const SizedBox(width: 6),
+                          IconButton.filledTonal(
+                            tooltip: 'Clear patient image',
+                            onPressed: onClear,
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
