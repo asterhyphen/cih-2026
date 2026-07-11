@@ -199,6 +199,18 @@ class NfcController extends Notifier<NfcState> {
     String? notes,
     String? photoRef,
     bool? urgent,
+    String? symptoms,
+    String? diagnosis,
+    String? medicalHistory,
+    String? currentMedication,
+    String? allergies,
+    String? consciousness,
+    String? emergencyNotes,
+    String? address,
+    String? contactDetails,
+    String? insurance,
+    String? gender,
+    String? bloodGroup,
   }) {
     final current = state.patient ?? PatientModel.empty;
     final updated = current.copyWith(
@@ -212,6 +224,18 @@ class NfcController extends Notifier<NfcState> {
       notes: notes,
       photoRef: photoRef,
       urgent: urgent,
+      symptoms: symptoms,
+      diagnosis: diagnosis,
+      medicalHistory: medicalHistory,
+      currentMedication: currentMedication,
+      allergies: allergies,
+      consciousness: consciousness,
+      emergencyNotes: emergencyNotes,
+      address: address,
+      contactDetails: contactDetails,
+      insurance: insurance,
+      gender: gender,
+      bloodGroup: bloodGroup,
     );
     final isComplete = updated.isValidForSend;
     state = state.copyWith(

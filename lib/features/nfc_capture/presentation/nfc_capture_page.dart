@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -284,6 +286,20 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                               .updateVitals(age: int.tryParse(value)),
                         ),
                         _VitalField(
+                          label: 'Gender',
+                          value: patient.gender,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(gender: value),
+                        ),
+                        _VitalField(
+                          label: 'Blood group',
+                          value: patient.bloodGroup,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(bloodGroup: value),
+                        ),
+                        _VitalField(
                           label: 'Blood pressure',
                           value: patient.bloodPressure,
                           onChanged: (value) => ref
@@ -317,6 +333,83 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                               .updateVitals(
                                 temperature: double.tryParse(value),
                               ),
+                        ),
+                        _VitalField(
+                          label: 'Symptoms',
+                          value: patient.symptoms,
+                          maxLines: 2,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(symptoms: value),
+                        ),
+                        _VitalField(
+                          label: 'Diagnosis',
+                          value: patient.diagnosis,
+                          maxLines: 2,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(diagnosis: value),
+                        ),
+                        _VitalField(
+                          label: 'Medical history',
+                          value: patient.medicalHistory,
+                          maxLines: 2,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(medicalHistory: value),
+                        ),
+                        _VitalField(
+                          label: 'Current medication',
+                          value: patient.currentMedication,
+                          maxLines: 2,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(currentMedication: value),
+                        ),
+                        _VitalField(
+                          label: 'Allergies',
+                          value: patient.allergies,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(allergies: value),
+                        ),
+                        _VitalField(
+                          label: 'Consciousness',
+                          value: patient.consciousness,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(consciousness: value),
+                        ),
+                        _VitalField(
+                          label: 'Emergency notes',
+                          value: patient.emergencyNotes,
+                          maxLines: 2,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(emergencyNotes: value),
+                        ),
+                        _VitalField(
+                          label: 'Address',
+                          value: patient.address,
+                          maxLines: 2,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(address: value),
+                        ),
+                        _VitalField(
+                          label: 'Contact details',
+                          value: patient.contactDetails,
+                          keyboardType: TextInputType.phone,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(contactDetails: value),
+                        ),
+                        _VitalField(
+                          label: 'Insurance',
+                          value: patient.insurance,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(insurance: value),
                         ),
                         _VitalField(
                           label: 'Clinical notes',
@@ -372,10 +465,12 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Transmission preview',
+                        'MGP1 payload captured',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
+                      _PayloadPreview(payload: captureState.payload),
+                      const SizedBox(height: 12),
                       Text(
                         'Protected chunks: ${chunks.where((c) => !c.parity).length}',
                       ),
@@ -391,8 +486,14 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                             .take(8)
                             .map(
                               (chunk) => Chip(
+                                avatar: Icon(
+                                  chunk.parity
+                                      ? Icons.add_link_rounded
+                                      : Icons.view_module_rounded,
+                                  size: 18,
+                                ),
                                 label: Text(
-                                  '${chunk.index}:${chunk.retrievalBit}',
+                                  '${chunk.parity ? 'P' : 'D'}${chunk.index}:${chunk.retrievalBit}',
                                 ),
                               ),
                             )
@@ -492,6 +593,28 @@ class _DiffSummary extends StatelessWidget {
   }
 }
 
+class _PayloadPreview extends StatelessWidget {
+  const _PayloadPreview({required this.payload});
+
+  final String payload;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: SelectableText(
+        payload,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+}
+
 class _PhotoReferenceField extends StatelessWidget {
   const _PhotoReferenceField({
     required this.value,
@@ -507,7 +630,11 @@ class _PhotoReferenceField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = value.trim().isNotEmpty;
+    final reference = value.trim();
+    final hasImage = reference.isNotEmpty;
+    final isPlaceholder = reference.startsWith('placeholder://');
+    final imageFile = hasImage && !isPlaceholder ? File(reference) : null;
+    final hasFile = imageFile != null && imageFile.existsSync();
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -529,17 +656,42 @@ class _PhotoReferenceField extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Center(
-                      child: Icon(
-                        hasImage
-                            ? Icons.image_rounded
-                            : Icons.add_photo_alternate_outlined,
-                        size: 56,
-                        color: hasImage
-                            ? colorScheme.onPrimaryContainer
-                            : colorScheme.onSurfaceVariant,
+                    if (hasFile)
+                      Image.file(imageFile, fit: BoxFit.cover)
+                    else
+                      Center(
+                        child: Icon(
+                          hasImage
+                              ? Icons.image_rounded
+                              : Icons.add_photo_alternate_outlined,
+                          size: 56,
+                          color: hasImage
+                              ? colorScheme.onPrimaryContainer
+                              : colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    if (hasImage)
+                      Positioned(
+                        left: 8,
+                        right: 8,
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface.withValues(alpha: 0.82),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isPlaceholder ? 'Placeholder image' : reference,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ),
                     Positioned(
                       right: 8,
                       top: 8,

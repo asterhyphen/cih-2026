@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/routing/app_router.dart';
 import '../../../core/widgets/animated_page_wrapper.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../data/patient_model.dart';
 import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../../nfc_capture/providers/nfc_provider.dart';
 import '../../transmission_engine/logic/protocol_engine.dart';
@@ -21,6 +25,7 @@ class SpecialistPage extends ConsumerWidget {
     final receipt = transmission.receipts.isEmpty
         ? null
         : transmission.receipts.first;
+    final rebuiltPatient = _tryDecodePatient(transmission.doctorPayload);
     final assessment = evaluateTriage(
       payload: captureState.payload,
       reliability: networkState.reliability,
@@ -38,7 +43,7 @@ class SpecialistPage extends ConsumerWidget {
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () => context.pop(),
+                      onPressed: () => context.go(AppRoutes.home),
                       icon: const Icon(Icons.arrow_back_ios_new_rounded),
                     ),
                     const SizedBox(width: 8),
@@ -93,7 +98,10 @@ class SpecialistPage extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                       ],
-                      Text('Received: ${transmission.doctorPayload}'),
+                      _DoctorPatientSummary(
+                        patient: rebuiltPatient,
+                        payload: transmission.doctorPayload,
+                      ),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
@@ -136,6 +144,8 @@ class SpecialistPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
                       _ChangedFields(fields: transmission.changedFields),
+                      const SizedBox(height: 12),
+                      _PayloadEvidence(transmission: transmission),
                       const SizedBox(height: 12),
                       Text(
                         'Triage severity: ${assessment.severity.toUpperCase()}',
@@ -190,11 +200,12 @@ class SpecialistPage extends ConsumerWidget {
                         runSpacing: 8,
                         children: [
                           FilledButton(
-                            onPressed: () => context.go('/home'),
+                            onPressed: () => context.go(AppRoutes.home),
                             child: const Text('Back to dashboard'),
                           ),
                           OutlinedButton(
-                            onPressed: () => context.go('/network-simulator'),
+                            onPressed: () =>
+                                context.go(AppRoutes.networkSimulator),
                             child: const Text('Review network'),
                           ),
                           FilledButton.tonal(
@@ -216,6 +227,169 @@ class SpecialistPage extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+PatientModel? _tryDecodePatient(String payload) {
+  try {
+    return PatientModel.fromPayload(payload);
+  } catch (_) {
+    return null;
+  }
+}
+
+class _DoctorPatientSummary extends StatelessWidget {
+  const _DoctorPatientSummary({required this.patient, required this.payload});
+
+  final PatientModel? patient;
+  final String payload;
+
+  @override
+  Widget build(BuildContext context) {
+    final patient = this.patient;
+    if (patient == null) {
+      return Text('Received: $payload');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DoctorImagePreview(reference: patient.photoRef),
+        const SizedBox(height: 12),
+        _PatientFieldGrid(patient: patient),
+      ],
+    );
+  }
+}
+
+class _DoctorImagePreview extends StatelessWidget {
+  const _DoctorImagePreview({required this.reference});
+
+  final String reference;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = reference.trim();
+    final isPlaceholder = trimmed.startsWith('placeholder://');
+    final imageFile = trimmed.isNotEmpty && !isPlaceholder
+        ? File(trimmed)
+        : null;
+    final hasFile = imageFile != null && imageFile.existsSync();
+    final colorScheme = Theme.of(context).colorScheme;
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: hasFile
+            ? Image.file(imageFile, fit: BoxFit.cover)
+            : Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isPlaceholder
+                          ? Icons.image_search_rounded
+                          : Icons.image_not_supported_outlined,
+                      size: 44,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      trimmed.isEmpty ? 'No image received' : trimmed,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _PatientFieldGrid extends StatelessWidget {
+  const _PatientFieldGrid({required this.patient});
+
+  final PatientModel patient;
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = <String, String>{
+      'Patient ID': patient.id,
+      'Name': patient.displayName,
+      'Age': patient.age == 0 ? '' : '${patient.age}',
+      'Gender': patient.gender,
+      'Blood group': patient.bloodGroup,
+      'Blood pressure': patient.bloodPressure,
+      'Heart rate': '${patient.heartRate}',
+      'Oxygen saturation': '${patient.oxygenSaturation}',
+      'Temperature': patient.temperature.toStringAsFixed(1),
+      'Symptoms': patient.symptoms,
+      'Diagnosis': patient.diagnosis,
+      'Medical history': patient.medicalHistory,
+      'Current medication': patient.currentMedication,
+      'Allergies': patient.allergies,
+      'Consciousness': patient.consciousness,
+      'Emergency notes': patient.emergencyNotes,
+      'Address': patient.address,
+      'Contact details': patient.contactDetails,
+      'Insurance': patient.insurance,
+      'Clinical notes': patient.notes,
+      'Photo payload ref': patient.photoRef,
+      'Urgent': patient.urgent ? 'Yes' : 'No',
+    };
+    return Column(
+      children: fields.entries
+          .map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 150,
+                    child: Text(
+                      entry.key,
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(entry.value.trim().isEmpty ? '-' : entry.value),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _PayloadEvidence extends StatelessWidget {
+  const _PayloadEvidence({required this.transmission});
+
+  final TransmissionState transmission;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Payload evidence', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 8),
+        Text(
+          'Chunks: ${transmission.chunkCount} data + ${transmission.parityCount} parity',
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Compression: ${transmission.originalByteCount} B to ${transmission.compressedByteCount} B',
+        ),
+        const SizedBox(height: 6),
+        SelectableText('MGP1: ${transmission.doctorPayload}'),
+      ],
     );
   }
 }
