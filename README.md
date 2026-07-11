@@ -20,14 +20,16 @@ MedGate is not a finished medical product. It is a proof-of-concept experience f
 - Patient data editing, validation, and optional tag writing for supported devices
 
 ### Transmission and recovery demo
-- Delta-based payload preparation so only changed fields are emphasized when possible
+- Real DEFLATE/gzip compression applied before encryption so payloads shrink before they leave the device
+- Delta-based payload preparation so only changed fields are emphasized when possible; the implementation uses field-level hashing to compare values conceptually like rsync-style delta transfer
 - Encrypted payload packaging and chunked transmission simulation
-- Parity-style chunk recovery to show how missing pieces can be reconstructed
+- Simplified XOR-based parity recovery that is conceptually similar to RAID 5 parity; it can reconstruct a single lost chunk per group from the remaining members of that group
 - Adaptive clinical priority ordering so critical vital data is transmitted first
 - Progressive specialist review that unlocks sections as data becomes available
 - Store-and-forward queueing with retry handling for later delivery attempts
+- Urgent Case mode that visibly accelerates fallback behavior and preserves a tiny thumbnail in fallback mode
 - Adaptive network profiles for ultra-low, low, medium, and high-bandwidth conditions
-- Live transmission budget, packet-loss, recovery, and delivery-time feedback in the simulator
+- Live transmission budget, packet-loss, recovery, delivery-time, and compression-size feedback in the simulator
 - Specialist review view with rebuilt data, changed-field highlighting, checksum context, and transmission proof
 
 ### Recent protocol enhancements
@@ -69,6 +71,16 @@ The following parts are intentionally simplified for demonstration purposes:
 - Shared Preferences for local persistence
 - Flutter Animate for light motion polish
 - Optional Rust native acceleration for the chunking hot path
+
+## Why these choices
+
+MedGate uses established open-source building blocks rather than inventing every transport primitive from scratch. The current stack credits:
+- archive for DEFLATE/gzip compression
+- crypto for field-level hashing and integrity checks
+- encrypt for payload encryption
+- flutter_image_compress for image-side compression concepts in the broader demo story
+
+That is a credibility strength: the app is demonstrating how familiar, well-understood algorithms can be composed into a believable clinical handoff experience rather than pretending to have built an entirely novel transport stack.
 
 ## Why Rust was added
 

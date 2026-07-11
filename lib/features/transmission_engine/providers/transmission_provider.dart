@@ -54,6 +54,7 @@ class TransmissionQueueItem {
     required this.retryCount,
     required this.createdAt,
     required this.payload,
+    this.isUrgent = false,
   });
 
   final String id;
@@ -63,6 +64,7 @@ class TransmissionQueueItem {
   final int retryCount;
   final DateTime createdAt;
   final String payload;
+  final bool isUrgent;
 
   TransmissionQueueItem copyWith({
     String? id,
@@ -72,6 +74,7 @@ class TransmissionQueueItem {
     int? retryCount,
     DateTime? createdAt,
     String? payload,
+    bool? isUrgent,
   }) {
     return TransmissionQueueItem(
       id: id ?? this.id,
@@ -81,6 +84,7 @@ class TransmissionQueueItem {
       retryCount: retryCount ?? this.retryCount,
       createdAt: createdAt ?? this.createdAt,
       payload: payload ?? this.payload,
+      isUrgent: isUrgent ?? this.isUrgent,
     );
   }
 }
@@ -125,6 +129,12 @@ class TransmissionState {
     this.emergencySnapshot = '',
     this.bandwidthBudget = 512,
     this.currentUsage = 0,
+    this.urgentCase = false,
+    this.compressedByteCount = 0,
+    this.originalByteCount = 0,
+    this.fallbackTriggered = false,
+    this.fallbackTriggerAttempt = 0,
+    this.fallbackImageTier = '',
     this.remainingBudget = 512,
     this.compressionRatio = 1.0,
     this.packetLoss = 0,
@@ -167,6 +177,12 @@ class TransmissionState {
   final String emergencySnapshot;
   final int bandwidthBudget;
   final int currentUsage;
+  final bool urgentCase;
+  final int compressedByteCount;
+  final int originalByteCount;
+  final bool fallbackTriggered;
+  final int fallbackTriggerAttempt;
+  final String fallbackImageTier;
   final int remainingBudget;
   final double compressionRatio;
   final int packetLoss;
@@ -209,6 +225,12 @@ class TransmissionState {
     String? emergencySnapshot,
     int? bandwidthBudget,
     int? currentUsage,
+    bool? urgentCase,
+    int? compressedByteCount,
+    int? originalByteCount,
+    bool? fallbackTriggered,
+    int? fallbackTriggerAttempt,
+    String? fallbackImageTier,
     int? remainingBudget,
     double? compressionRatio,
     int? packetLoss,
@@ -251,6 +273,12 @@ class TransmissionState {
       emergencySnapshot: emergencySnapshot ?? this.emergencySnapshot,
       bandwidthBudget: bandwidthBudget ?? this.bandwidthBudget,
       currentUsage: currentUsage ?? this.currentUsage,
+      urgentCase: urgentCase ?? this.urgentCase,
+      compressedByteCount: compressedByteCount ?? this.compressedByteCount,
+      originalByteCount: originalByteCount ?? this.originalByteCount,
+      fallbackTriggered: fallbackTriggered ?? this.fallbackTriggered,
+      fallbackTriggerAttempt: fallbackTriggerAttempt ?? this.fallbackTriggerAttempt,
+      fallbackImageTier: fallbackImageTier ?? this.fallbackImageTier,
       remainingBudget: remainingBudget ?? this.remainingBudget,
       compressionRatio: compressionRatio ?? this.compressionRatio,
       packetLoss: packetLoss ?? this.packetLoss,
@@ -332,11 +360,14 @@ class TransmissionController extends Notifier<TransmissionState> {
     final queueEntry = TransmissionQueueItem(
       id: 'queue-${_queueCounter++}',
       status: 'sending',
-      summary: 'MedGate Protocol transmitting ${patient.displayName}',
+      summary: patient.urgent
+          ? 'URGENT MedGate Protocol transmitting ${patient.displayName}'
+          : 'MedGate Protocol transmitting ${patient.displayName}',
       packetCount: initialResult.chunksSent,
       retryCount: 0,
       createdAt: DateTime.now(),
       payload: patient.toPayload(),
+      isUrgent: patient.urgent,
     );
 
     state = state.copyWith(
@@ -354,6 +385,12 @@ class TransmissionController extends Notifier<TransmissionState> {
       redundancy: initialNetwork.redundancy,
       parityPackets: initialNetwork.parityPackets,
       networkProfile: initialNetwork.profileLabel,
+      urgentCase: patient.urgent,
+      compressedByteCount: initialResult.compressedByteCount,
+      originalByteCount: initialResult.originalByteCount,
+      fallbackTriggered: initialResult.fallbackTriggered,
+      fallbackTriggerAttempt: initialResult.fallbackTriggerAttempt,
+      fallbackImageTier: initialResult.fallbackImageTier,
     );
 
     late SecureTransmissionResult result;
@@ -380,6 +417,8 @@ class TransmissionController extends Notifier<TransmissionState> {
         reliability: reliability,
         sparePieces: sparePieces + liveNetwork.redundancy,
         chunkSize: liveNetwork.chunkSize,
+        urgent: patient.urgent,
+        retryAttempt: step ~/ 20,
       );
       if (packetLoss > 0) {
         for (var index = 0; index < packetLoss; index++) {
@@ -407,7 +446,10 @@ class TransmissionController extends Notifier<TransmissionState> {
         validationIssues: validationIssues,
         emergencySnapshot: emergencySnapshot,
         queueItems: [
-          queueEntry.copyWith(status: step < 100 ? 'sending' : result.rebuilt ? 'delivered' : 'failed'),
+          queueEntry.copyWith(
+            status: step < 100 ? 'sending' : result.rebuilt ? 'delivered' : 'failed',
+            isUrgent: patient.urgent,
+          ),
           ...state.queueItems.where((item) => item.id != queueEntry.id),
         ],
         timeline: _timelineFromStep(step, result),
@@ -427,6 +469,12 @@ class TransmissionController extends Notifier<TransmissionState> {
         redundancy: liveNetwork.redundancy,
         parityPackets: liveNetwork.parityPackets,
         networkProfile: liveNetwork.profileLabel,
+        urgentCase: patient.urgent,
+        compressedByteCount: result.compressedByteCount,
+        originalByteCount: result.originalByteCount,
+        fallbackTriggered: result.fallbackTriggered,
+        fallbackTriggerAttempt: result.fallbackTriggerAttempt,
+        fallbackImageTier: result.fallbackImageTier,
       );
     }
 
@@ -450,6 +498,8 @@ class TransmissionController extends Notifier<TransmissionState> {
           : 'Partial data held for retry',
       history: [activity, ...state.history],
       logs: [
+        if (patient.urgent)
+          'URGENT — expedited fallback triggered'.toUpperCase(),
         '${result.lostPieces} chunks dropped; ${result.chunksUsed} rebuilt.',
         'Checksum ${result.checksumMatch ? 'matched' : 'mismatched'}: '
             '${result.sourceChecksum}.',
@@ -463,7 +513,11 @@ class TransmissionController extends Notifier<TransmissionState> {
       validationIssues: validationIssues,
       emergencySnapshot: emergencySnapshot,
       queueItems: [
-        queueEntry.copyWith(status: result.rebuilt ? 'delivered' : 'failed', summary: result.rebuilt ? 'Delivered' : 'Queued for retry'),
+        queueEntry.copyWith(
+          status: result.rebuilt ? 'delivered' : 'failed',
+          summary: result.rebuilt ? 'Delivered' : 'Queued for retry',
+          isUrgent: patient.urgent,
+        ),
         ...state.queueItems.where((item) => item.id != queueEntry.id),
       ],
       timeline: [
@@ -490,6 +544,12 @@ class TransmissionController extends Notifier<TransmissionState> {
       redundancy: initialNetwork.redundancy,
       parityPackets: initialNetwork.parityPackets,
       networkProfile: initialNetwork.profileLabel,
+      urgentCase: patient.urgent,
+      compressedByteCount: result.compressedByteCount,
+      originalByteCount: result.originalByteCount,
+      fallbackTriggered: result.fallbackTriggered,
+      fallbackTriggerAttempt: result.fallbackTriggerAttempt,
+      fallbackImageTier: result.fallbackImageTier,
     );
   }
 
@@ -556,6 +616,12 @@ class TransmissionController extends Notifier<TransmissionState> {
     required int redundancy,
     required int parityPackets,
     required String networkProfile,
+    required bool urgentCase,
+    required int compressedByteCount,
+    required int originalByteCount,
+    required bool fallbackTriggered,
+    required int fallbackTriggerAttempt,
+    required String fallbackImageTier,
   }) {
     return TransmissionState(
       status: status,
@@ -600,6 +666,12 @@ class TransmissionController extends Notifier<TransmissionState> {
       redundancy: redundancy,
       parityPackets: parityPackets,
       networkProfile: networkProfile,
+      urgentCase: urgentCase,
+      compressedByteCount: compressedByteCount,
+      originalByteCount: originalByteCount,
+      fallbackTriggered: fallbackTriggered,
+      fallbackTriggerAttempt: fallbackTriggerAttempt,
+      fallbackImageTier: fallbackImageTier,
     );
   }
 

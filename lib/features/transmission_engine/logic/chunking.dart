@@ -52,6 +52,9 @@ List<ProtectedChunk> buildProtectedChunks(
   return buildProtectedChunksOptimized(input, chunkSize: chunkSize, sparePieces: sparePieces);
 }
 
+/// A simplified erasure-coding scheme using XOR-based parity, conceptually similar
+/// to the parity mechanism used in RAID 5 disk arrays. If one chunk in a group is
+/// lost, it can be reconstructed from the remaining chunks in that group.
 List<ProtectedChunk> buildProtectedChunksOptimized(
   String input, {
   int chunkSize = 18,
@@ -98,6 +101,7 @@ List<ProtectedChunk> buildProtectedChunksOptimized(
   return [...dataChunks, ...parityChunks];
 }
 
+/// Reconstructs a payload from the surviving data chunks and their parity blocks.
 String reconstructPayload(
   Iterable<ProtectedChunk> availableChunks, {
   required int expectedDataChunkCount,

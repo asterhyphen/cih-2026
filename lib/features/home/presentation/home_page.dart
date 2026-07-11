@@ -100,6 +100,10 @@ class HomePage extends ConsumerWidget {
                             label: 'Signal',
                             value: networkState.qualityLabel,
                           ),
+                          _SummaryChip(
+                            label: 'Urgency',
+                            value: patient?.urgent == true ? 'Urgent' : 'Routine',
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -152,6 +156,10 @@ class HomePage extends ConsumerWidget {
                       Text(
                         'Adaptive rebuild: ${adaptiveResult.summary} '
                         '(${adaptiveResult.survivalPercent}%)',
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Compression: ${transmissionState.originalByteCount > 0 ? ((transmissionState.originalByteCount - transmissionState.compressedByteCount) / transmissionState.originalByteCount * 100).toStringAsFixed(1) : 0}% saved',
                       ),
                       const SizedBox(height: 4),
                       Text(

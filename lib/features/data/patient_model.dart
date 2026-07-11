@@ -9,6 +9,7 @@ class PatientModel {
     required this.temperature,
     required this.notes,
     required this.photoRef,
+    this.urgent = false,
     this.symptoms = '',
     this.diagnosis = '',
     this.medicalHistory = '',
@@ -32,6 +33,7 @@ class PatientModel {
   final double temperature;
   final String notes;
   final String photoRef;
+  final bool urgent;
   final String symptoms;
   final String diagnosis;
   final String medicalHistory;
@@ -68,6 +70,7 @@ class PatientModel {
       temperature: double.tryParse(data['temp'] ?? '') ?? 0,
       notes: data['notes']?.trim() ?? '',
       photoRef: data['photo']?.trim() ?? '',
+      urgent: data['urgent']?.toLowerCase() == 'true',
       symptoms: data['symptoms']?.trim() ?? '',
       diagnosis: data['diagnosis']?.trim() ?? '',
       medicalHistory: data['medicalHistory']?.trim() ?? '',
@@ -105,6 +108,7 @@ class PatientModel {
     'temp': temperature.toStringAsFixed(1),
     'notes': notes,
     'photo': photoRef,
+    'urgent': urgent.toString(),
     'symptoms': symptoms,
     'diagnosis': diagnosis,
     'medicalHistory': medicalHistory,
@@ -142,6 +146,7 @@ class PatientModel {
     double? temperature,
     String? notes,
     String? photoRef,
+    bool? urgent,
     String? symptoms,
     String? diagnosis,
     String? medicalHistory,
@@ -165,6 +170,7 @@ class PatientModel {
       temperature: temperature ?? this.temperature,
       notes: notes ?? this.notes,
       photoRef: photoRef ?? this.photoRef,
+      urgent: urgent ?? this.urgent,
       symptoms: symptoms ?? this.symptoms,
       diagnosis: diagnosis ?? this.diagnosis,
       medicalHistory: medicalHistory ?? this.medicalHistory,

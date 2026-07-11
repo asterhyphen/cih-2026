@@ -63,6 +63,7 @@ class SpecialistPage extends ConsumerWidget {
                       _IntegrityBanner(
                         receipt: receipt,
                         rebuilt: transmission.rebuilt,
+                        urgent: transmission.urgentCase,
                       ),
                       const SizedBox(height: 12),
                       if (transmission.priorityFields.isNotEmpty) ...[
@@ -107,6 +108,11 @@ class SpecialistPage extends ConsumerWidget {
                             icon: Icons.health_and_safety_rounded,
                             label: 'Survival',
                             value: '${transmission.survivalPercent}%',
+                          ),
+                          _InfoChip(
+                            icon: transmission.urgentCase ? Icons.emergency_rounded : Icons.assignment_turned_in_rounded,
+                            label: 'Urgency',
+                            value: transmission.urgentCase ? 'Urgent' : 'Routine',
                           ),
                         ],
                       ),
@@ -175,15 +181,18 @@ class SpecialistPage extends ConsumerWidget {
 }
 
 class _IntegrityBanner extends StatelessWidget {
-  const _IntegrityBanner({required this.receipt, required this.rebuilt});
+  const _IntegrityBanner({required this.receipt, required this.rebuilt, required this.urgent});
 
   final TransmissionReceipt? receipt;
   final bool rebuilt;
+  final bool urgent;
 
   @override
   Widget build(BuildContext context) {
     final matched = receipt?.checksumMatch ?? false;
-    final color = matched
+    final color = urgent
+        ? Theme.of(context).colorScheme.error
+        : matched
         ? Theme.of(context).colorScheme.primary
         : Theme.of(context).colorScheme.error;
     return Container(
@@ -196,13 +205,15 @@ class _IntegrityBanner extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            matched ? Icons.verified_rounded : Icons.pending_actions_rounded,
+            urgent ? Icons.emergency_rounded : matched ? Icons.verified_rounded : Icons.pending_actions_rounded,
             color: color,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              matched
+              urgent
+                  ? 'URGENT — expedited fallback active'
+                  : matched
                   ? 'Checksum match confirmed'
                   : rebuilt
                   ? 'Awaiting checksum receipt'

@@ -193,6 +193,23 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                         ),
                         const SizedBox(height: 12),
                         _SourceBadge(source: captureState.captureSource),
+                        const SizedBox(height: 8),
+                        if (patient.urgent)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.emergency_rounded, size: 16),
+                                const SizedBox(width: 6),
+                                Text('Urgent case', style: Theme.of(context).textTheme.labelMedium),
+                              ],
+                            ),
+                          ),
                         const SizedBox(height: 12),
                         _VitalField(
                           label: 'Patient ID',
@@ -265,6 +282,15 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                           onChanged: (value) => ref
                               .read(nfcProvider.notifier)
                               .updateVitals(photoRef: value),
+                        ),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Mark as urgent'),
+                          subtitle: const Text('Expedites fallback and preserves a tiny thumbnail in fallback mode.'),
+                          value: patient.urgent,
+                          onChanged: (value) => ref
+                              .read(nfcProvider.notifier)
+                              .updateVitals(urgent: value),
                         ),
                         const SizedBox(height: 8),
                         FilledButton(

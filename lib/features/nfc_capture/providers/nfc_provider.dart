@@ -187,6 +187,7 @@ class NfcController extends Notifier<NfcState> {
     double? temperature,
     String? notes,
     String? photoRef,
+    bool? urgent,
   }) {
     final current = state.patient ?? PatientModel.empty;
     final updated = current.copyWith(
@@ -199,6 +200,7 @@ class NfcController extends Notifier<NfcState> {
       temperature: temperature,
       notes: notes,
       photoRef: photoRef,
+      urgent: urgent,
     );
     final isComplete = updated.isValidForSend;
     state = state.copyWith(

@@ -151,5 +151,95 @@ void main() {
       expect(issues, isNotEmpty);
       expect(issues.any((issue) => issue.message.contains('Heart Rate')), isTrue);
     });
+
+    test('round-trips compressed payloads through encryption and recovery', () {
+      final original = 'BP 118/74 | HR 92 | SPO2 97 | Temp 36.8';
+      final packed = compressAndEncryptPayload(original);
+      final chunks = buildProtectedChunks(
+        packed,
+        chunkSize: 10,
+        sparePieces: 2,
+      );
+      final dataChunks = chunks.where((chunk) => !chunk.parity).toList();
+      final dropped = dataChunks.take(2).toList();
+      final remaining = chunks
+          .where((chunk) => !dropped.contains(chunk))
+          .toList();
+
+      final reconstructed = reconstructPayload(
+        remaining,
+        expectedDataChunkCount: dataChunks.length,
+      );
+      final restored = decryptAndDecompressPayload(reconstructed);
+
+      expect(restored, original);
+    });
+
+    test('urgent cases trigger fallback sooner than routine ones', () {
+      final patient = PatientModel(
+        id: 'P5',
+        displayName: 'Ruth Bader Ginsburg',
+        age: 87,
+        bloodPressure: '130/80',
+        heartRate: 96,
+        oxygenSaturation: 95,
+        temperature: 37.2,
+        notes: 'Needs rapid transport',
+        photoRef: 'thumb-1',
+        urgent: true,
+      );
+
+      final urgent = simulateSecureTransmission(
+        patient: patient,
+        previousRecord: null,
+        reliability: 40,
+        urgent: true,
+        retryAttempt: 0,
+      );
+      final routine = simulateSecureTransmission(
+        patient: patient.copyWith(urgent: false),
+        previousRecord: null,
+        reliability: 40,
+        urgent: false,
+        retryAttempt: 2,
+      );
+
+      expect(urgent.fallbackTriggered, isTrue);
+      expect(urgent.fallbackTriggerAttempt, lessThan(routine.fallbackTriggerAttempt));
+      expect(routine.fallbackTriggered, isFalse);
+    });
+
+    test('urgent fallback keeps the smallest image tier while routine fallback drops it', () {
+      final patient = PatientModel(
+        id: 'P6',
+        displayName: 'Mary Anning',
+        age: 72,
+        bloodPressure: '122/78',
+        heartRate: 88,
+        oxygenSaturation: 96,
+        temperature: 37.0,
+        notes: 'Urgent review',
+        photoRef: 'thumb-2',
+        urgent: true,
+      );
+
+      final urgent = simulateSecureTransmission(
+        patient: patient,
+        previousRecord: null,
+        reliability: 40,
+        urgent: true,
+        retryAttempt: 0,
+      );
+      final routine = simulateSecureTransmission(
+        patient: patient.copyWith(urgent: false),
+        previousRecord: null,
+        reliability: 40,
+        urgent: false,
+        retryAttempt: 2,
+      );
+
+      expect(urgent.fallbackImageTier, 'tiny-blurred-thumbnail');
+      expect(routine.fallbackImageTier, isEmpty);
+    });
   });
 }

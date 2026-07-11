@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 class DeltaResult {
   const DeltaResult({
     required this.payload,
@@ -14,6 +18,9 @@ class DeltaResult {
   final int deltaPayloadSize;
 }
 
+/// A field-level diffing approach conceptually similar to rsync's delta-transfer
+/// workflow: only fields that changed since the last transmitted record are sent,
+/// while the previous record is referenced by ID.
 DeltaResult encodeDelta(
   Map<String, String> current,
   Map<String, String>? previous,
@@ -36,7 +43,7 @@ DeltaResult encodeDelta(
       preserved.add(entry);
       continue;
     }
-    if (previous[entry.key] != entry.value) {
+    if (_hashValue(previous[entry.key] ?? '') != _hashValue(entry.value)) {
       changed.add(entry);
     }
   }
@@ -53,4 +60,10 @@ DeltaResult encodeDelta(
 
 String _encodeEntry(MapEntry<String, String> entry) {
   return '${entry.key}=${entry.value}';
+}
+
+String _hashValue(String value) {
+  final bytes = utf8.encode(value);
+  final digest = sha256.convert(bytes);
+  return digest.toString();
 }
