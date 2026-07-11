@@ -7,6 +7,8 @@ import '../../../core/widgets/floating_nav_bar.dart';
 import '../../../core/widgets/glass_container.dart';
 import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../../nfc_capture/providers/nfc_provider.dart';
+import '../../patient_storage/logic/patient_record_store.dart';
+import '../../patient_storage/providers/patient_storage_provider.dart';
 import '../../transmission_engine/logic/adaptive_transmission.dart';
 import '../../transmission_engine/logic/chunking.dart';
 import '../../transmission_engine/logic/protocol_engine.dart';
@@ -21,10 +23,18 @@ class HomePage extends ConsumerWidget {
     final captureState = ref.watch(nfcProvider);
     final transmissionState = ref.watch(transmissionProvider);
     final networkState = ref.watch(networkSimulatorProvider);
+    final storageState = ref.watch(patientStorageProvider);
     final patient = captureState.patient;
+    final storedRecord = patient == null
+        ? null
+        : storageState.recordFor(patient.id);
     final chunks = chunkText(captureState.payload, 8);
-    final clinicalPlan = patient == null ? null : buildClinicalTransmissionPlan(patient);
-    final validationIssues = patient == null ? const <ValidationIssue>[] : validateClinicalValues(patient);
+    final clinicalPlan = patient == null
+        ? null
+        : buildClinicalTransmissionPlan(patient);
+    final validationIssues = patient == null
+        ? const <ValidationIssue>[]
+        : validateClinicalValues(patient);
     final assessment = evaluateTriage(
       payload: captureState.payload,
       reliability: networkState.reliability,
@@ -66,6 +76,10 @@ class HomePage extends ConsumerWidget {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
+                          if (storedRecord != null) ...[
+                            _SyncStatusChip(status: storedRecord.status),
+                            const SizedBox(width: 8),
+                          ],
                           _StatusPill(ready: patient != null),
                         ],
                       ),
@@ -102,8 +116,19 @@ class HomePage extends ConsumerWidget {
                           ),
                           _SummaryChip(
                             label: 'Urgency',
-                            value: patient?.urgent == true ? 'Urgent' : 'Routine',
+                            value: patient?.urgent == true
+                                ? 'Urgent'
+                                : 'Routine',
                           ),
+                          if (storedRecord != null)
+                            _SummaryChip(
+                              label: 'Storage',
+                              value: switch (storedRecord.status) {
+                                PatientSyncStatus.newRecord => 'New',
+                                PatientSyncStatus.updated => 'Updated',
+                                PatientSyncStatus.synced => 'Synced',
+                              },
+                            ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -123,15 +148,24 @@ class HomePage extends ConsumerWidget {
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: clinicalPlan.priorityFields.take(6).map((field) {
-                            final color = field.priority == ClinicalPriority.critical
+                          children: clinicalPlan.priorityFields.take(6).map((
+                            field,
+                          ) {
+                            final color =
+                                field.priority == ClinicalPriority.critical
                                 ? Theme.of(context).colorScheme.error
                                 : field.priority == ClinicalPriority.high
                                 ? Theme.of(context).colorScheme.primary
                                 : Theme.of(context).colorScheme.secondary;
                             return Chip(
-                              avatar: Icon(Icons.priority_high_rounded, color: color, size: 18),
-                              label: Text('${field.label} · ${field.priority.name}'),
+                              avatar: Icon(
+                                Icons.priority_high_rounded,
+                                color: color,
+                                size: 18,
+                              ),
+                              label: Text(
+                                '${field.label} · ${field.priority.name}',
+                              ),
                             );
                           }).toList(),
                         ),
@@ -246,6 +280,27 @@ class _SummaryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Chip(label: Text('$label: $value'));
+  }
+}
+
+class _SyncStatusChip extends StatelessWidget {
+  const _SyncStatusChip({required this.status});
+
+  final PatientSyncStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (status) {
+      PatientSyncStatus.newRecord => Icons.add_circle_outline_rounded,
+      PatientSyncStatus.updated => Icons.sync_problem_rounded,
+      PatientSyncStatus.synced => Icons.verified_rounded,
+    };
+    final label = switch (status) {
+      PatientSyncStatus.newRecord => 'New',
+      PatientSyncStatus.updated => 'Updated',
+      PatientSyncStatus.synced => 'Synced',
+    };
+    return Chip(avatar: Icon(icon, size: 18), label: Text(label));
   }
 }
 

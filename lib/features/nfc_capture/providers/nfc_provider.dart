@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/patient_model.dart';
+import '../../patient_storage/providers/patient_storage_provider.dart';
 import '../logic/nfc_patient_reader.dart';
 
 class NfcState {
@@ -86,6 +89,9 @@ class NfcController extends Notifier<NfcState> {
         showGuide: false,
         captureSource: 'nfc',
       );
+      unawaited(
+        ref.read(patientStorageProvider.notifier).stageCapture(patient),
+      );
     } catch (error) {
       final permissionRequired =
           error is NfcPermissionException ||
@@ -129,6 +135,11 @@ class NfcController extends Notifier<NfcState> {
       patient: patient,
       captureSource: 'manual',
     );
+    if (patient.isValidForSend) {
+      unawaited(
+        ref.read(patientStorageProvider.notifier).stageCapture(patient),
+      );
+    }
   }
 
   Future<void> writePatientCard() async {
@@ -215,6 +226,11 @@ class NfcController extends Notifier<NfcState> {
       confidence: isComplete ? 100 : 0,
       showGuide: false,
     );
+    if (isComplete) {
+      unawaited(
+        ref.read(patientStorageProvider.notifier).stageCapture(updated),
+      );
+    }
   }
 
   void clear() {

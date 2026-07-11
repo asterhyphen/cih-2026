@@ -7,3 +7,4 @@
 - Mock transport and chaos-simulation logic lives in lib/features/transmission_engine/logic and is driven by lib/features/network_simulator/providers; extend those files instead of adding transport behavior directly to widgets.
 - Compress payloads before encryption in the transmission pipeline so the gzip/DEFLATE step actually reduces size; do not encrypt first and then compress.
 - Urgency is a manual intake flag that flows through the patient model, transmission engine, queue state, and integrity log so urgent cases are visibly treated differently without introducing AI inference.
+- Patient storage uses a compare-then-overwrite rule: stage local captures as pending, compare deltas against the last confirmed database baseline, and overwrite that baseline only after specialist-side reconstruction is confirmed successful.

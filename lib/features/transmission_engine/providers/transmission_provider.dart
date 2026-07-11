@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/patient_model.dart';
 import '../../network_simulator/providers/network_simulator_provider.dart';
+import '../../patient_storage/providers/patient_storage_provider.dart';
 import '../logic/protocol_engine.dart';
 import '../logic/recovery_strategy.dart';
 import '../logic/secure_transmission.dart';
@@ -287,19 +288,23 @@ class TransmissionState {
       compressedByteCount: compressedByteCount ?? this.compressedByteCount,
       originalByteCount: originalByteCount ?? this.originalByteCount,
       fallbackTriggered: fallbackTriggered ?? this.fallbackTriggered,
-      fallbackTriggerAttempt: fallbackTriggerAttempt ?? this.fallbackTriggerAttempt,
+      fallbackTriggerAttempt:
+          fallbackTriggerAttempt ?? this.fallbackTriggerAttempt,
       fallbackImageTier: fallbackImageTier ?? this.fallbackImageTier,
       remainingBudget: remainingBudget ?? this.remainingBudget,
       compressionRatio: compressionRatio ?? this.compressionRatio,
       packetLoss: packetLoss ?? this.packetLoss,
       latency: latency ?? this.latency,
       recoveryPercent: recoveryPercent ?? this.recoveryPercent,
-      recoveryConfidencePercent: recoveryConfidencePercent ?? this.recoveryConfidencePercent,
+      recoveryConfidencePercent:
+          recoveryConfidencePercent ?? this.recoveryConfidencePercent,
       recoveryMessage: recoveryMessage ?? this.recoveryMessage,
       recoveryState: recoveryState ?? this.recoveryState,
-      estimatedDeliveryTime: estimatedDeliveryTime ?? this.estimatedDeliveryTime,
+      estimatedDeliveryTime:
+          estimatedDeliveryTime ?? this.estimatedDeliveryTime,
       missingChunkIds: missingChunkIds ?? this.missingChunkIds,
-      retransmittedChunkIds: retransmittedChunkIds ?? this.retransmittedChunkIds,
+      retransmittedChunkIds:
+          retransmittedChunkIds ?? this.retransmittedChunkIds,
       activeStrategy: activeStrategy ?? this.activeStrategy,
       chunkSize: chunkSize ?? this.chunkSize,
       compressionLevel: compressionLevel ?? this.compressionLevel,
@@ -311,7 +316,6 @@ class TransmissionState {
 }
 
 class TransmissionController extends Notifier<TransmissionState> {
-  Map<String, String>? _lastSentRecord;
   int _queueCounter = 0;
 
   @override
@@ -349,9 +353,12 @@ class TransmissionController extends Notifier<TransmissionState> {
     int sparePieces = 3,
   }) async {
     final initialNetwork = ref.read(networkSimulatorProvider);
+    final previousRecord = await ref
+        .read(patientStorageProvider.notifier)
+        .confirmedWireMap(patient.id);
     final initialResult = simulateSecureTransmission(
       patient: patient,
-      previousRecord: _lastSentRecord,
+      previousRecord: previousRecord,
       reliability: initialNetwork.reliability,
       sparePieces: sparePieces + initialNetwork.redundancy,
       chunkSize: initialNetwork.chunkSize,
@@ -425,11 +432,15 @@ class TransmissionController extends Notifier<TransmissionState> {
       latencyMs = liveNetwork.latencyMs;
       packetLoss = ((100 - reliability) ~/ 4).clamp(0, 60);
       recoveryPercent = ((reliability - packetLoss).clamp(0, 100));
-      deliveryTime = (plan.estimatedDeliveryMs + latencyMs + packetLoss * 8).clamp(180, 1800);
-      compressionRatio = (1.0 + (liveNetwork.compressionLevel / 10)).clamp(1.0, 2.6);
+      deliveryTime = (plan.estimatedDeliveryMs + latencyMs + packetLoss * 8)
+          .clamp(180, 1800);
+      compressionRatio = (1.0 + (liveNetwork.compressionLevel / 10)).clamp(
+        1.0,
+        2.6,
+      );
       result = simulateSecureTransmission(
         patient: patient,
-        previousRecord: _lastSentRecord,
+        previousRecord: previousRecord,
         reliability: reliability,
         sparePieces: sparePieces + liveNetwork.redundancy,
         chunkSize: liveNetwork.chunkSize,
@@ -460,7 +471,11 @@ class TransmissionController extends Notifier<TransmissionState> {
       await Future<void>.delayed(Duration(milliseconds: latencyMs ~/ 12));
       state = _stateFromResult(
         result,
-        status: step < 100 ? 'transmitting' : result.rebuilt ? 'delivered' : 'partial',
+        status: step < 100
+            ? 'transmitting'
+            : result.rebuilt
+            ? 'delivered'
+            : 'partial',
         progress: step,
         message: step < 100
             ? 'Sending priority chunks'
@@ -476,7 +491,11 @@ class TransmissionController extends Notifier<TransmissionState> {
         emergencySnapshot: emergencySnapshot,
         queueItems: [
           queueEntry.copyWith(
-            status: step < 100 ? 'sending' : result.rebuilt ? 'delivered' : 'failed',
+            status: step < 100
+                ? 'sending'
+                : result.rebuilt
+                ? 'delivered'
+                : 'failed',
             isUrgent: patient.urgent,
           ),
           ...state.queueItems.where((item) => item.id != queueEntry.id),
@@ -484,7 +503,10 @@ class TransmissionController extends Notifier<TransmissionState> {
         timeline: _timelineFromStep(step, result),
         bandwidthBudget: initialNetwork.bandwidthKbps,
         currentUsage: ((step / 100) * initialNetwork.bandwidthKbps).round(),
-        remainingBudget: (initialNetwork.bandwidthKbps - ((step / 100) * initialNetwork.bandwidthKbps)).round(),
+        remainingBudget:
+            (initialNetwork.bandwidthKbps -
+                    ((step / 100) * initialNetwork.bandwidthKbps))
+                .round(),
         compressionRatio: compressionRatio,
         packetLoss: packetLoss,
         latency: latencyMs,
@@ -511,7 +533,9 @@ class TransmissionController extends Notifier<TransmissionState> {
     }
 
     if (result.rebuilt) {
-      _lastSentRecord = patient.toWireMap();
+      await ref
+          .read(patientStorageProvider.notifier)
+          .markTransmissionConfirmed(patient);
     }
 
     final receipt = _receiptFromResult(result);
@@ -601,7 +625,9 @@ class TransmissionController extends Notifier<TransmissionState> {
     final updatedItems = [...state.queueItems];
     updatedItems[itemIndex] = TransmissionQueueItem(
       id: id,
-      status: network.reliability >= 80 && network.latencyMs <= 300 ? 'sending' : 'retrying',
+      status: network.reliability >= 80 && network.latencyMs <= 300
+          ? 'sending'
+          : 'retrying',
       summary: 'Retry queued',
       packetCount: updatedItems[itemIndex].packetCount,
       retryCount: updatedItems[itemIndex].retryCount + 1,
@@ -731,9 +757,28 @@ class TransmissionController extends Notifier<TransmissionState> {
     );
   }
 
-  List<TransmissionTimelineEvent> _timelineFromStep(int step, SecureTransmissionResult result) {
-    final labels = <String>['Patient registered', 'NFC captured', 'Validated', 'Encrypted', 'Compressed', 'Chunked', 'Sent', 'Recovered', 'Verified'];
-    final status = step < 40 ? 'pending' : step < 80 ? 'active' : result.rebuilt ? 'verified' : 'recovered';
+  List<TransmissionTimelineEvent> _timelineFromStep(
+    int step,
+    SecureTransmissionResult result,
+  ) {
+    final labels = <String>[
+      'Patient registered',
+      'NFC captured',
+      'Validated',
+      'Encrypted',
+      'Compressed',
+      'Chunked',
+      'Sent',
+      'Recovered',
+      'Verified',
+    ];
+    final status = step < 40
+        ? 'pending'
+        : step < 80
+        ? 'active'
+        : result.rebuilt
+        ? 'verified'
+        : 'recovered';
     return [
       ...state.timeline,
       TransmissionTimelineEvent(

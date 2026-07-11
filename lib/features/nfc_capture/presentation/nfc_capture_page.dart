@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/widgets/animated_page_wrapper.dart';
 import '../../../core/widgets/floating_nav_bar.dart';
 import '../../../core/widgets/glass_container.dart';
+import '../../patient_storage/providers/patient_storage_provider.dart';
 import '../../transmission_engine/logic/chunking.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
 import '../providers/nfc_provider.dart';
@@ -73,7 +74,12 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
     });
     final captureState = ref.watch(nfcProvider);
     final transmission = ref.watch(transmissionProvider);
+    final storage = ref.watch(patientStorageProvider);
     final patient = captureState.patient;
+    final storedRecord = patient == null ? null : storage.recordFor(patient.id);
+    final diffLines = patient == null || storage.latestPatient?.id != patient.id
+        ? const <String>[]
+        : storage.latestDiff.summaries(patient, storedRecord?.confirmedPatient);
     final chunks = buildProtectedChunks(captureState.payload);
     final canSend =
         patient != null && captureState.valid && patient.isValidForSend;
@@ -196,9 +202,14 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                         const SizedBox(height: 8),
                         if (patient.urgent)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.errorContainer,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.errorContainer,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Row(
@@ -206,10 +217,19 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                               children: [
                                 const Icon(Icons.emergency_rounded, size: 16),
                                 const SizedBox(width: 6),
-                                Text('Urgent case', style: Theme.of(context).textTheme.labelMedium),
+                                Text(
+                                  'Urgent case',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.labelMedium,
+                                ),
                               ],
                             ),
                           ),
+                        if (diffLines.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _DiffSummary(lines: diffLines),
+                        ],
                         const SizedBox(height: 12),
                         _VitalField(
                           label: 'Patient ID',
@@ -286,7 +306,9 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                         SwitchListTile.adaptive(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Mark as urgent'),
-                          subtitle: const Text('Expedites fallback and preserves a tiny thumbnail in fallback mode.'),
+                          subtitle: const Text(
+                            'Expedites fallback and preserves a tiny thumbnail in fallback mode.',
+                          ),
                           value: patient.urgent,
                           onChanged: (value) => ref
                               .read(nfcProvider.notifier)
@@ -399,6 +421,32 @@ class _SourceBadge extends StatelessWidget {
           Icon(icon, size: 16),
           const SizedBox(width: 6),
           Text(label, style: Theme.of(context).textTheme.labelMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiffSummary extends StatelessWidget {
+  const _DiffSummary({required this.lines});
+
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Delta preview', style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 6),
+          ...lines.take(5).map((line) => Text(line)),
         ],
       ),
     );

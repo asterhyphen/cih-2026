@@ -18,10 +18,11 @@ MedGate is not a finished medical product. It is a proof-of-concept experience f
 - A glass-style dashboard shell for patient overview and workflow status
 - NFC capture with manual fallback entry when NFC is unavailable
 - Patient data editing, validation, and optional tag writing for supported devices
+- Local SQLite persistence via sqflite for patient records, including the last successfully transmitted baseline used for delta comparison
 
 ### Transmission and recovery demo
 - Real DEFLATE/gzip compression applied before encryption so payloads shrink before they leave the device
-- Delta-based payload preparation so only changed fields are emphasized when possible; the implementation uses field-level hashing to compare values conceptually like rsync-style delta transfer
+- Delta-based payload preparation so only changed fields are emphasized when possible; the implementation uses field-level hashing against the last successfully transmitted local database record, not just the last locally edited value
 - Encrypted payload packaging and chunked transmission simulation
 - Simplified XOR-based parity recovery that is conceptually similar to RAID 5 parity; it can reconstruct a single lost chunk per group from the remaining members of that group
 - Adaptive clinical priority ordering so critical vital data is transmitted first
@@ -48,7 +49,7 @@ MedGate is not a finished medical product. It is a proof-of-concept experience f
 
 The following parts are intentionally simplified for demonstration purposes:
 - Authentication is local-only and not connected to a real identity provider
-- Patient data is stored in app state and is not backed by a production database
+- Patient data is persisted locally in SQLite for demo-grade store-and-forward behavior; it is not a production clinical database
 - NFC scanning is real when supported by the device, but it falls back gracefully when unavailable or blocked
 - The transport path is a strong prototype, not a production-grade medical transport system
 - The app is designed to demonstrate workflow credibility, not to satisfy full HIPAA, medical-device, or regulated clinical deployment requirements
@@ -69,6 +70,7 @@ The following parts are intentionally simplified for demonstration purposes:
 - Go Router for navigation
 - NFC Manager for contactless capture on supported devices
 - Shared Preferences for local persistence
+- sqflite for local patient-record storage and durable delta baselines
 - Flutter Animate for light motion polish
 - Optional Rust native acceleration for the chunking hot path
 
