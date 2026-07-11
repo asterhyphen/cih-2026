@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/widgets/animated_page_wrapper.dart';
 import '../../../core/widgets/floating_nav_bar.dart';
@@ -7,6 +10,7 @@ import '../../../core/widgets/glass_container.dart';
 import '../../patient_storage/providers/patient_storage_provider.dart';
 import '../../transmission_engine/logic/chunking.dart';
 import '../../transmission_engine/providers/transmission_provider.dart';
+import '../logic/patient_image_details.dart';
 import '../providers/nfc_provider.dart';
 import 'nfc_scan_dialog.dart';
 
@@ -19,6 +23,7 @@ class NfcCapturePage extends ConsumerStatefulWidget {
 
 class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
   bool _scanDialogVisible = false;
+  final ImagePicker _imagePicker = ImagePicker();
 
   void _presentScanDialog() {
     if (!mounted || _scanDialogVisible) {
@@ -37,6 +42,30 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
         }
       });
     });
+  }
+
+  Future<void> _selectPatientImage() async {
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 45,
+        maxWidth: 1024,
+      );
+      if (image == null) {
+        return;
+      }
+      ref.read(nfcProvider.notifier).updateVitals(photoRef: image.path);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Image selection failed: $error'),
+        ),
+      );
+    }
   }
 
   @override
@@ -302,6 +331,7 @@ class _NfcCapturePageState extends ConsumerState<NfcCapturePage> {
                         ),
                         _PhotoReferenceField(
                           value: patient.photoRef,
+                          onSelectImage: _selectPatientImage,
                           onUsePlaceholder: () => ref
                               .read(nfcProvider.notifier)
                               .updateVitals(
