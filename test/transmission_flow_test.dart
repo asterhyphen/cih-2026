@@ -49,7 +49,7 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      container.read(networkSimulatorProvider.notifier).setReliability(85);
+      container.read(networkSimulatorProvider.notifier).setReliability(95);
       await container
           .read(transmissionProvider.notifier)
           .sendPatientRecord(

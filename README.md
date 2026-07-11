@@ -23,8 +23,19 @@ MedGate is not a finished medical product. It is a proof-of-concept experience f
 - Delta-based payload preparation so only changed fields are emphasized when possible
 - Encrypted payload packaging and chunked transmission simulation
 - Parity-style chunk recovery to show how missing pieces can be reconstructed
-- Network simulator controls for latency and reliability
+- Adaptive clinical priority ordering so critical vital data is transmitted first
+- Progressive specialist review that unlocks sections as data becomes available
+- Store-and-forward queueing with retry handling for later delivery attempts
+- Adaptive network profiles for ultra-low, low, medium, and high-bandwidth conditions
+- Live transmission budget, packet-loss, recovery, and delivery-time feedback in the simulator
 - Specialist review view with rebuilt data, changed-field highlighting, checksum context, and transmission proof
+
+### Recent protocol enhancements
+- The transmission engine now behaves like a protocol-centric experience under the MedGate Protocol (MGP) concept
+- Priority badges highlight which fields are critical, high, medium, or low importance
+- Local validation warns on clinically implausible values without using any cloud service
+- Transmission state now tracks missing chunks, retransmission activity, and recovery progress
+- The network simulator exposes active strategy, chunk size, compression level, redundancy, and parity settings
 
 ### Platform and UX polish
 - Android-focused UX patterns and NFC guidance
@@ -47,7 +58,7 @@ The following parts are intentionally simplified for demonstration purposes:
 3. If the device supports NFC and a tag is available, MedGate captures and validates the patient details.
 4. If NFC is unavailable, the app offers a manual fallback path so the flow still continues.
 5. The patient payload is packaged, encrypted, chunked, and passed through a simulated network layer.
-6. The specialist console displays the rebuilt payload, changed fields, recovery behavior, and the transmission evidence.
+6. The specialist console progressively unlocks sections as the record rebuilds and displays the rebuilt payload, changed fields, recovery behavior, and the transmission evidence.
 
 ## Tech stack
 

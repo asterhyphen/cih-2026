@@ -374,7 +374,7 @@ class _InfoPill extends StatelessWidget {
   }
 }
 
-class _ProfileChip extends StatelessWidget {
+class _ProfileChip extends ConsumerWidget {
   const _ProfileChip({required this.label, required this.value});
 
   final String label;

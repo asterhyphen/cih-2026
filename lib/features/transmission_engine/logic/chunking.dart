@@ -1,6 +1,17 @@
 import 'dart:convert';
 
+import 'rust_chunking_bridge.dart';
+
 List<String> chunkText(String input, int chunkSize) {
+  return chunkTextOptimized(input, chunkSize);
+}
+
+List<String> chunkTextOptimized(String input, int chunkSize) {
+  final rustChunks = RustChunkingBridge.instance.tryChunkText(input, chunkSize);
+  if (rustChunks != null) {
+    return rustChunks;
+  }
+
   if (input.isEmpty || chunkSize <= 0) {
     return const <String>[];
   }
@@ -38,7 +49,15 @@ List<ProtectedChunk> buildProtectedChunks(
   int chunkSize = 18,
   int sparePieces = 2,
 }) {
-  final chunks = chunkText(input, chunkSize);
+  return buildProtectedChunksOptimized(input, chunkSize: chunkSize, sparePieces: sparePieces);
+}
+
+List<ProtectedChunk> buildProtectedChunksOptimized(
+  String input, {
+  int chunkSize = 18,
+  int sparePieces = 2,
+}) {
+  final chunks = chunkTextOptimized(input, chunkSize);
   if (chunks.isEmpty) {
     return const <ProtectedChunk>[];
   }

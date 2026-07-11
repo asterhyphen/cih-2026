@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 
 import '../theme/glass_style.dart';
 import 'glass_container.dart';
@@ -14,27 +13,27 @@ class FloatingNavBar extends StatelessWidget {
       context,
     ).routeInformationProvider.value.uri.toString();
     final items = <_NavItem>[
-      _NavItem(path: '/home', icon: LucideIcons.home, label: 'Home'),
-      _NavItem(path: '/nfc-capture', icon: LucideIcons.scanLine, label: 'NFC'),
+      _NavItem(path: '/home', icon: Icons.home_rounded, label: 'Home'),
+      _NavItem(path: '/nfc-capture', icon: Icons.nfc_rounded, label: 'NFC'),
       _NavItem(
         path: '/network-simulator',
-        icon: LucideIcons.network,
+        icon: Icons.hub_rounded,
         label: 'Network',
       ),
       _NavItem(
         path: '/specialist',
-        icon: LucideIcons.stethoscope,
+        icon: Icons.medical_services_rounded,
         label: 'Specialist',
       ),
       _NavItem(
         path: '/settings',
-        icon: LucideIcons.settings,
+        icon: Icons.settings_rounded,
         label: 'Settings',
       ),
     ];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
       child: GlassContainer(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
