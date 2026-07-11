@@ -1,6 +1,6 @@
-# MedGate
+# Namma MedGate
 
-MedGate is an Android-first Flutter prototype for contactless patient intake and protected transmission workflows. The app is designed to demonstrate a realistic clinical handoff experience from intake to specialist review, with a polished glass UI, an NFC-friendly workflow, and a simulated network layer that makes reliability and recovery behavior visible.
+Namma MedGate is an Android-first Flutter prototype for contactless patient intake and protected transmission workflows. The app is designed to demonstrate a realistic clinical handoff experience from intake to specialist review, with a polished glass UI, an NFC-friendly workflow, and a simulated network layer that makes reliability and recovery behavior visible.
 
 ## What this app is trying to show
 
