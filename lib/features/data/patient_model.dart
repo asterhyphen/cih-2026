@@ -1,3 +1,5 @@
+import 'patient_schema.dart';
+
 class PatientModel {
   const PatientModel({
     required this.id,
@@ -64,12 +66,12 @@ class PatientModel {
       id: data['id']?.trim() ?? '',
       displayName: data['name']?.trim() ?? '',
       age: int.tryParse(data['age'] ?? '') ?? 0,
-      bloodPressure: data['bp']?.trim() ?? '',
-      heartRate: int.tryParse(data['hr'] ?? '') ?? 0,
-      oxygenSaturation: int.tryParse(data['spo2'] ?? '') ?? 0,
-      temperature: double.tryParse(data['temp'] ?? '') ?? 0,
+      bloodPressure: data['bloodPressure']?.trim() ?? data['bp']?.trim() ?? '',
+      heartRate: int.tryParse(data['heartRate'] ?? data['hr'] ?? '') ?? 0,
+      oxygenSaturation: int.tryParse(data['oxygenSaturation'] ?? data['spo2'] ?? '') ?? 0,
+      temperature: double.tryParse(data['temperature'] ?? data['temp'] ?? '') ?? 0,
       notes: data['notes']?.trim() ?? '',
-      photoRef: data['photo']?.trim() ?? '',
+      photoRef: data['photoRef']?.trim() ?? data['photo']?.trim() ?? '',
       urgent: data['urgent']?.toLowerCase() == 'true',
       symptoms: data['symptoms']?.trim() ?? '',
       diagnosis: data['diagnosis']?.trim() ?? '',
@@ -86,28 +88,16 @@ class PatientModel {
     );
   }
 
-  factory PatientModel.fromPayload(String payload) {
-    final data = <String, String>{};
-    for (final part in payload.split('|')) {
-      final separator = part.indexOf('=');
-      if (separator <= 0) {
-        continue;
-      }
-      data[part.substring(0, separator)] = part.substring(separator + 1);
-    }
-    return PatientModel.fromWireMap(data);
-  }
-
   Map<String, String> toWireMap() => {
     'id': id,
     'name': displayName,
     'age': '$age',
-    'bp': bloodPressure,
-    'hr': '$heartRate',
-    'spo2': '$oxygenSaturation',
-    'temp': temperature.toStringAsFixed(1),
+    'bloodPressure': bloodPressure,
+    'heartRate': '$heartRate',
+    'oxygenSaturation': '$oxygenSaturation',
+    'temperature': temperature.toStringAsFixed(1),
     'notes': notes,
-    'photo': photoRef,
+    'photoRef': photoRef,
     'urgent': urgent.toString(),
     'symptoms': symptoms,
     'diagnosis': diagnosis,
@@ -123,9 +113,23 @@ class PatientModel {
     'bloodGroup': bloodGroup,
   };
 
-  String toPayload() => toWireMap().entries
-      .map((entry) => '${entry.key}=${entry.value}')
-      .join('|');
+  String toPayload() => PatientSchema.encodeValues(toWireMap());
+
+  factory PatientModel.fromPayload(String payload) {
+    if (payload.startsWith(PatientSchema.versionPrefix)) {
+      final values = PatientSchema.decodeValues(payload);
+      return PatientModel.fromWireMap(values);
+    }
+    final data = <String, String>{};
+    for (final part in payload.split('|')) {
+      final separator = part.indexOf('=');
+      if (separator <= 0) {
+        continue;
+      }
+      data[part.substring(0, separator)] = part.substring(separator + 1);
+    }
+    return PatientModel.fromWireMap(data);
+  }
 
   bool get isValidForSend {
     return id.trim().isNotEmpty &&

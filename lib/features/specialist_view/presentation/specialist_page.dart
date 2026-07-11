@@ -114,6 +114,11 @@ class SpecialistPage extends ConsumerWidget {
                             label: 'Urgency',
                             value: transmission.urgentCase ? 'Urgent' : 'Routine',
                           ),
+                          _InfoChip(
+                            icon: Icons.replay_circle_filled_rounded,
+                            label: 'Recovery',
+                            value: '${transmission.recoveryConfidencePercent}%',
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),

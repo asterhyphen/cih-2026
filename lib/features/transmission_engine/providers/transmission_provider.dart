@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/patient_model.dart';
 import '../../network_simulator/providers/network_simulator_provider.dart';
 import '../logic/protocol_engine.dart';
+import '../logic/recovery_strategy.dart';
 import '../logic/secure_transmission.dart';
 
 class TransmissionActivity {
@@ -140,6 +141,9 @@ class TransmissionState {
     this.packetLoss = 0,
     this.latency = 0,
     this.recoveryPercent = 0,
+    this.recoveryConfidencePercent = 0,
+    this.recoveryMessage = 'Waiting for a recovery run',
+    this.recoveryState = 'idle',
     this.estimatedDeliveryTime = 0,
     this.missingChunkIds = const <String>[],
     this.retransmittedChunkIds = const <String>[],
@@ -188,6 +192,9 @@ class TransmissionState {
   final int packetLoss;
   final int latency;
   final int recoveryPercent;
+  final int recoveryConfidencePercent;
+  final String recoveryMessage;
+  final String recoveryState;
   final int estimatedDeliveryTime;
   final List<String> missingChunkIds;
   final List<String> retransmittedChunkIds;
@@ -236,6 +243,9 @@ class TransmissionState {
     int? packetLoss,
     int? latency,
     int? recoveryPercent,
+    int? recoveryConfidencePercent,
+    String? recoveryMessage,
+    String? recoveryState,
     int? estimatedDeliveryTime,
     List<String>? missingChunkIds,
     List<String>? retransmittedChunkIds,
@@ -284,6 +294,9 @@ class TransmissionState {
       packetLoss: packetLoss ?? this.packetLoss,
       latency: latency ?? this.latency,
       recoveryPercent: recoveryPercent ?? this.recoveryPercent,
+      recoveryConfidencePercent: recoveryConfidencePercent ?? this.recoveryConfidencePercent,
+      recoveryMessage: recoveryMessage ?? this.recoveryMessage,
+      recoveryState: recoveryState ?? this.recoveryState,
       estimatedDeliveryTime: estimatedDeliveryTime ?? this.estimatedDeliveryTime,
       missingChunkIds: missingChunkIds ?? this.missingChunkIds,
       retransmittedChunkIds: retransmittedChunkIds ?? this.retransmittedChunkIds,
@@ -398,6 +411,9 @@ class TransmissionController extends Notifier<TransmissionState> {
     var latencyMs = initialNetwork.latencyMs;
     var packetLoss = 0;
     var recoveryPercent = 0;
+    var recoveryConfidencePercent = 0;
+    var recoveryMessage = 'Waiting for a recovery run';
+    var recoveryState = 'idle';
     var deliveryTime = plan.estimatedDeliveryMs;
     var compressionRatio = 1.0 + (initialNetwork.compressionLevel / 10);
     final missingChunkIds = <String>[];
@@ -420,6 +436,19 @@ class TransmissionController extends Notifier<TransmissionState> {
         urgent: patient.urgent,
         retryAttempt: step ~/ 20,
       );
+      final recoveryStrategy = liveNetwork.activeStrategy == 'RS'
+          ? const ReedSolomonRecoveryStrategy()
+          : const XorParityRecoveryStrategy();
+      final recoveryResult = recoveryStrategy.evaluate(
+        expectedChunks: result.chunkCount + result.parityCount,
+        receivedChunks: result.chunksSent - result.lostPieces,
+        recoveryChunks: result.parityCount,
+        recoveredFields: result.delta.changedFields,
+        checksumMatched: result.checksumMatch,
+      );
+      recoveryConfidencePercent = recoveryResult.confidencePercent;
+      recoveryMessage = recoveryResult.message;
+      recoveryState = recoveryResult.state.name;
       if (packetLoss > 0) {
         for (var index = 0; index < packetLoss; index++) {
           missingChunkIds.add('chunk-${index + 1}');
@@ -460,6 +489,9 @@ class TransmissionController extends Notifier<TransmissionState> {
         packetLoss: packetLoss,
         latency: latencyMs,
         recoveryPercent: recoveryPercent,
+        recoveryConfidencePercent: recoveryConfidencePercent,
+        recoveryMessage: recoveryMessage,
+        recoveryState: recoveryState,
         estimatedDeliveryTime: deliveryTime,
         missingChunkIds: missingChunkIds.toSet().toList(),
         retransmittedChunkIds: retransmittedChunkIds.toSet().toList(),
@@ -535,6 +567,9 @@ class TransmissionController extends Notifier<TransmissionState> {
       packetLoss: packetLoss,
       latency: latencyMs,
       recoveryPercent: recoveryPercent,
+      recoveryConfidencePercent: recoveryConfidencePercent,
+      recoveryMessage: recoveryMessage,
+      recoveryState: recoveryState,
       estimatedDeliveryTime: deliveryTime,
       missingChunkIds: missingChunkIds.toSet().toList(),
       retransmittedChunkIds: retransmittedChunkIds.toSet().toList(),
@@ -607,6 +642,9 @@ class TransmissionController extends Notifier<TransmissionState> {
     required int packetLoss,
     required int latency,
     required int recoveryPercent,
+    required int recoveryConfidencePercent,
+    required String recoveryMessage,
+    required String recoveryState,
     required int estimatedDeliveryTime,
     required List<String> missingChunkIds,
     required List<String> retransmittedChunkIds,
@@ -657,6 +695,9 @@ class TransmissionController extends Notifier<TransmissionState> {
       packetLoss: packetLoss,
       latency: latency,
       recoveryPercent: recoveryPercent,
+      recoveryConfidencePercent: recoveryConfidencePercent,
+      recoveryMessage: recoveryMessage,
+      recoveryState: recoveryState,
       estimatedDeliveryTime: estimatedDeliveryTime,
       missingChunkIds: missingChunkIds,
       retransmittedChunkIds: retransmittedChunkIds,
