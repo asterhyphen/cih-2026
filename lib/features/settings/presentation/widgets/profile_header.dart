@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
-import '../../../auth/providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 
 class ProfileHeader extends ConsumerWidget {
@@ -42,13 +41,7 @@ class ProfileHeader extends ConsumerWidget {
                       fontWeight: FontWeight.bold,
                     ),
               ),
-              IconButton(
-                icon: const Icon(Icons.logout_rounded, color: Colors.white),
-                onPressed: () {
-                  ref.read(authProvider.notifier).signOut();
-                  context.go('/login');
-                },
-              ),
+              const SizedBox(width: 48),
             ],
           ),
           const SizedBox(height: 16),
