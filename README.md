@@ -8,7 +8,7 @@ Namma MedGate is a Flutter prototype for contactless patient intake and protecte
 | Feature | Description |
 |---|---|
 | **GZIP Compression** | Payload shrinks before leaving the device. |
-| **Pipeline** | Raw data → positional binary encoding → max-level gzip → encryption → redundancy chunks → network transmission. Every stage's byte count is logged. |
+| **Pipeline** | Raw data → binary encoding → gzip → encryption → redundancy chunks → network transmission. |
 | **Delta Encoding** | Only changed fields are sent, compared against the last *successfully transmitted* record in local storage — not just the last edit. |
 | **Recovery (XOR/Reed-Solomon)** | RAID 5-style parity reconstructs lost chunks. Fails honestly past its correction limit — same as QR codes failing when damage is too severe. |
 | **Recovery Confidence Score** | Reflects real math, not inflated. Severe loss can mean partial or failed recovery — that's intentional, not a bug. |
