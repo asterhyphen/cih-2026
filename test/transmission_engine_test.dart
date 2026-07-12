@@ -343,7 +343,54 @@ void main() {
       expect(result.encodedByteCount, lessThan(result.originalByteCount));
       expect(result.compressedByteCount, lessThan(result.encodedByteCount));
       expect(result.finalByteCount, greaterThan(result.compressedByteCount));
-      expect(result.stageLog, hasLength(4));
+      expect(result.stageLog, hasLength(5));
+      expect(result.stageLog[3], startsWith('Encrypted payload:'));
+      expect(result.stageLog[4], startsWith('Redundant chunks:'));
+    });
+
+    test('confirmed baseline sends sparse positional delta bytes', () {
+      final previous = PatientModel(
+        id: 'P10',
+        displayName: 'Baseline Patient',
+        age: 45,
+        bloodPressure: '120/80',
+        heartRate: 72,
+        oxygenSaturation: 98,
+        temperature: 36.8,
+        notes: List.filled(30, 'stable note').join(' '),
+        photoRef: 'image-a',
+      ).toWireMap();
+      final patient = PatientModel(
+        id: 'P10',
+        displayName: 'Baseline Patient',
+        age: 45,
+        bloodPressure: '120/80',
+        heartRate: 88,
+        oxygenSaturation: 98,
+        temperature: 36.8,
+        notes: List.filled(30, 'stable note').join(' '),
+        photoRef: 'image-a',
+      );
+
+      final full = simulateSecureTransmission(
+        patient: patient,
+        previousRecord: null,
+        reliability: 100,
+        sparePieces: 2,
+        randomSeed: 3,
+      );
+      final delta = simulateSecureTransmission(
+        patient: patient,
+        previousRecord: previous,
+        reliability: 100,
+        sparePieces: 2,
+        randomSeed: 3,
+      );
+
+      expect(delta.delta.changedFields, ['heartRate']);
+      expect(delta.encodedByteCount, lessThan(full.encodedByteCount));
+      expect(delta.delta.payload, isNot(contains('notes=')));
+      expect(delta.checksumMatch, isTrue);
     });
 
     test('same loss percent with different seeds produces different drops', () {

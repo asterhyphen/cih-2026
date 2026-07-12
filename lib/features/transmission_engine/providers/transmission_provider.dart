@@ -819,14 +819,16 @@ class TransmissionController extends Notifier<TransmissionState> {
           id: 'urgent-delivered-${queued.id}',
           severity: ClinicalSeverity.success,
           title: 'Urgent Dispatch Delivered',
-          body: 'Urgent case ${patient.displayName} successfully reconstructed via priority lane.',
+          body:
+              'Urgent case ${patient.displayName} successfully reconstructed via priority lane.',
         );
       } else {
         alertNotifier.push(
           id: 'transmission-success-${queued.id}',
           severity: ClinicalSeverity.success,
           title: 'Transmission Successful',
-          body: 'Patient record ${patient.displayName} successfully reconstructed.',
+          body:
+              'Patient record ${patient.displayName} successfully reconstructed.',
         );
       }
     } else {
@@ -842,7 +844,8 @@ class TransmissionController extends Notifier<TransmissionState> {
           id: 'transmission-failed-${queued.id}',
           severity: ClinicalSeverity.critical,
           title: 'Transmission Failed',
-          body: 'Recovery confidence missed. Redundancy capacity exceeded under current network loss.',
+          body:
+              'Recovery confidence missed. Redundancy capacity exceeded under current network loss.',
         );
       }
     }
@@ -852,7 +855,8 @@ class TransmissionController extends Notifier<TransmissionState> {
         id: 'fallback-active-${queued.id}',
         severity: ClinicalSeverity.caution,
         title: 'Fallback Channel Active',
-        body: 'Primary route offline. Expedited lower-tier fallback payload activated.',
+        body:
+            'Primary route offline. Expedited lower-tier fallback payload activated.',
       );
     }
 
@@ -1144,8 +1148,8 @@ class TransmissionController extends Notifier<TransmissionState> {
       'Patient registered',
       'NFC captured',
       'Validated',
-      'Encrypted',
       'Compressed',
+      'Encrypted',
       'Chunked',
       'Sent',
       'Recovered',

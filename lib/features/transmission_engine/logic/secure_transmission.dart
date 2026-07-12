@@ -123,8 +123,10 @@ SecureTransmissionResult simulateSecureTransmission({
         priority: TransmissionPriority.media,
       ),
   ]);
-  final rawPayload = PatientSchema.encodeDelimitedValues(patient.toWireMap());
-  final recordBytes = encodePatientRecord(patient);
+  final currentWireMap = patient.toWireMap();
+  final deltaWireMap = _deltaWireMap(currentWireMap, delta);
+  final rawPayload = delta.payload;
+  final recordBytes = PatientSchema.encodeValueBytes(deltaWireMap);
   // Compress before encrypt so the payload is reduced with DEFLATE/gzip and the
   // ciphertext does not remain as raw, incompressible noise.
   final compressedPayload = _compressBytes(recordBytes);
@@ -154,15 +156,14 @@ SecureTransmissionResult simulateSecureTransmission({
   final dataChunks = chunks.where((chunk) => !chunk.parity).length;
   final rebuilt = recovery.rebuilt;
   final chunksUsed = recovery.recoveredDataChunks;
-  final sourceChecksum = _checksum(delta.payload);
+  final sourceChecksum = _checksum(encryptedPayload);
   final fallbackTriggered = urgent || (retryAttempt >= 3 && reliability < 60);
   final fallbackTriggerAttempt = urgent ? 0 : (retryAttempt + 1).clamp(0, 4);
   final fallbackImageTier = urgent && fallbackTriggered
       ? 'tiny-blurred-thumbnail'
       : '';
-  final rebuiltChecksum = rebuilt
-      ? sourceChecksum
-      : _checksum('partial:${recovery.payload}');
+  final rebuiltChecksum = _checksum(recovery.payload);
+  final checksumMatch = rebuilt && recovery.payload == encryptedPayload;
   final survival = rebuilt ? 100 : recovery.confidencePercent;
   final originalBytes = utf8.encode(rawPayload).length;
   final encodedBytes = recordBytes.length;
@@ -182,7 +183,7 @@ SecureTransmissionResult simulateSecureTransmission({
     parityCount: sparePieces,
     chunksSent: chunks.length,
     chunksUsed: chunksUsed,
-    checksumMatch: rebuilt && sourceChecksum == rebuiltChecksum,
+    checksumMatch: checksumMatch,
     sourceChecksum: sourceChecksum,
     rebuiltChecksum: rebuiltChecksum,
     naiveStatus: lostPieces == 0
@@ -203,6 +204,7 @@ SecureTransmissionResult simulateSecureTransmission({
       originalBytes: originalBytes,
       encodedBytes: encodedBytes,
       compressedBytes: compressedBytes,
+      encryptedBytes: encryptedBytes,
       finalBytes: finalBytes,
     ),
     missingChunkIds: droppedChunks
@@ -213,6 +215,19 @@ SecureTransmissionResult simulateSecureTransmission({
     fallbackTriggerAttempt: fallbackTriggerAttempt,
     fallbackImageTier: fallbackImageTier,
   );
+}
+
+Map<String, String> _deltaWireMap(
+  Map<String, String> current,
+  DeltaResult delta,
+) {
+  if (delta.changedFields.length == current.length) {
+    return current;
+  }
+  return <String, String>{
+    'id': current['id'] ?? '',
+    for (final field in delta.changedFields) field: current[field] ?? '',
+  };
 }
 
 String _compressPayload(String value) {
@@ -253,13 +268,15 @@ List<String> _stageLog({
   required int originalBytes,
   required int encodedBytes,
   required int compressedBytes,
+  required int encryptedBytes,
   required int finalBytes,
 }) {
   return [
     'Raw payload: $originalBytes B',
     'Positional payload: $encodedBytes B (${_saved(originalBytes, encodedBytes)} saved)',
     'GZip level 9: $compressedBytes B (${_saved(encodedBytes, compressedBytes)} saved)',
-    'Encrypted + redundancy: $finalBytes B (${_growth(compressedBytes, finalBytes)} overhead)',
+    'Encrypted payload: $encryptedBytes B (${_growth(compressedBytes, encryptedBytes)} overhead)',
+    'Redundant chunks: $finalBytes B (${_growth(encryptedBytes, finalBytes)} overhead)',
   ];
 }
 
