@@ -2,7 +2,7 @@
 
 Namma MedGate is a Flutter prototype for contactless patient intake and protected transmission workflows. The app is designed to demonstrate a realistic clinical handoff experience from intake to specialist review prioritising reliability and recovery behavior.
 
-```markdown
+
 ## Current Features
 
 | Feature | Description |
@@ -50,4 +50,3 @@ Real, proven algorithms — not reinvented ones.
 | **Workload** | Chunking is CPU-bound, byte-heavy work |
 | **Benefit** | Faster processing, no GC overhead |
 | **Fallback** | Automatically uses pure Dart if Rust isn't installed |
-```
